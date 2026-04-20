@@ -167,5 +167,6 @@ GlucoBuddy provides a structured and extensible platform for diabetes management
 ---
 
 ## Author
-Liam
-Computer Science Student
+Liam Jones
+
+3rd Year Computer Science Student
