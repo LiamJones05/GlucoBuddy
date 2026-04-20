@@ -1,0 +1,213 @@
+.dashboard {
+  padding: 1.5rem;
+}
+
+.dashboard-title {
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+.card {
+  background: white;
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.card h3 {
+  margin: 0 0 0.5rem 0;
+}
+
+.card-copy {
+  margin: 0 0 1rem;
+  color: #64748b;
+}
+
+.card-copy--tight {
+  margin-top: 0.75rem;
+}
+
+.card--wide {
+  grid-column: 1 / -1;
+}
+
+.chart-container {
+  width: 100%;
+}
+
+.chart-container h3 {
+  margin-bottom: 0.35rem;
+}
+
+.chart-subtitle {
+  margin: 0 0 1rem;
+  color: #64748b;
+  font-size: 0.95rem;
+}
+
+.glucose-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.glucose-controls label,
+.insulin-form label,
+.dose-summary label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: #334155;
+  font-size: 0.9rem;
+}
+
+.glucose-controls input,
+.insulin-form input,
+.dose-summary input {
+  min-width: 140px;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+
+.glucose-controls button,
+.button-primary,
+.button-secondary {
+  align-self: flex-end;
+  padding: 0.6rem 1rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.glucose-controls button {
+  background: #243f5c;
+  color: white;
+}
+
+.glucose-controls button:disabled,
+.button-primary:disabled,
+.button-secondary:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.insulin-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.insulin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.button-primary {
+  background: #243f5c;
+  color: white;
+}
+
+.button-secondary {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.button-tertiary {
+  padding: 0;
+  margin-bottom: 0.9rem;
+  background: transparent;
+  color: #1d4ed8;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.insulin-form--advanced {
+  padding: 0.9rem;
+  margin-bottom: 0.75rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.dose-summary {
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.dose-summary__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.dose-summary__header h4 {
+  margin: 0;
+}
+
+.dose-summary__header strong {
+  color: #0f766e;
+  font-size: 1.1rem;
+}
+
+.dose-breakdown {
+  margin-top: 0.75rem;
+}
+
+.dose-breakdown p,
+.insulin-note {
+  margin: 0.35rem 0 0;
+  color: #475569;
+}
+
+.dose-assumptions {
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px dashed #cbd5e1;
+}
+
+.dose-assumptions__title {
+  margin: 0 0 0.35rem;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.dose-assumptions p {
+  margin: 0.25rem 0 0;
+  color: #475569;
+}
+
+.form-success {
+  margin: 0 0 1rem;
+  color: #166534;
+}
+
+.form-error {
+  margin: 0 0 1rem;
+  color: #b91c1c;
+}
+
+@media (min-width: 768px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

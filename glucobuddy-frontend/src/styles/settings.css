@@ -1,0 +1,79 @@
+.settings {
+  padding: 1.5rem;
+}
+
+.settings-title {
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Layout wrapper for sections */
+.settings-section {
+  margin-bottom: 1.5rem;
+}
+
+/* Card style (reuse dashboard look) */
+.settings-card {
+  background: white;
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 1rem;
+}
+
+.settings-card h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.1rem;
+}
+
+/* Inputs */
+.settings-card input {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  outline: none;
+  transition: border 0.2s ease;
+}
+
+.settings-card input:focus {
+  border-color: #3b82f6;
+}
+
+/* Save button */
+.settings button {
+  background: #2563eb;
+  color: white;
+  padding: 0.6rem 1rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: background 0.2s ease;
+}
+
+.settings button:hover {
+  background: #1d4ed8;
+}
+
+/* Desktop layout improvements */
+@media (min-width: 768px) {
+  .settings-card {
+    max-width: 600px;
+  }
+}
+
+.settings-card label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 0.35rem;
+    margin-top: 0.75rem;
+}
+
+.settings-card label:first-of-type{
+    margin-top:0;
+}

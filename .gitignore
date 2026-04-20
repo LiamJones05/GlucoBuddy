@@ -1,0 +1,24 @@
+# Environment variables (ALL locations)
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Node modules (ALL locations)
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+**/dist/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
