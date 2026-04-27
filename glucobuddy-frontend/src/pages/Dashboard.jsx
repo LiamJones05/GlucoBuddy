@@ -1,8 +1,16 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import API from '../api/api';
 import '../styles/dashboard.css';
 import GlucoseChart from '../components/GlucoseChart';
+import GlucoseAverageChart from '../components/GlucoseAverageChart';
+import InsightList from '../components/InsightList';
 import { buildChartData, INSULIN_ACTION_HOURS } from '../utils/iob';
+import { createReportChartImageDataUrl } from '../utils/reportChart';
+import { downloadReportPdf } from '../utils/reportPdf';
+
+const AVERAGE_WINDOWS = [14, 30, 90];
+const INSIGHT_WINDOW = 30;
+const MAX_REPORT_DAYS = 90;
 
 function getLocalDateValue(date = new Date()) {
   const timezoneOffset = date.getTimezoneOffset() * 60000;
@@ -11,6 +19,12 @@ function getLocalDateValue(date = new Date()) {
 
 function getLocalTimeValue(date = new Date()) {
   return date.toTimeString().slice(0, 5);
+}
+
+function getDateDaysAgoValue(daysAgo) {
+  const date = new Date();
+  date.setDate(date.getDate() - daysAgo);
+  return getLocalDateValue(date);
 }
 
 function parseMinutesSinceMidnight(timeText) {
@@ -22,13 +36,25 @@ function toSafeNumber(value, fallback = 0) {
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
 }
 
+function calculateInclusiveDayCount(startDate, endDate) {
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
+  return Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+}
+
 export default function Dashboard() {
   const today = getLocalDateValue();
   const [glucoseData, setGlucoseData] = useState([]);
   const [insulinLogs, setInsulinLogs] = useState([]);
+  const [averageData, setAverageData] = useState([]);
+  const [insights, setInsights] = useState([]);
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [averageLoading, setAverageLoading] = useState(true);
+  const [insightLoading, setInsightLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
+  const [averageError, setAverageError] = useState('');
+  const [insightError, setInsightError] = useState('');
   const [saveError, setSaveError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [calculatorError, setCalculatorError] = useState('');
@@ -38,6 +64,12 @@ export default function Dashboard() {
   const [doseResult, setDoseResult] = useState(null);
   const [finalDose, setFinalDose] = useState('');
   const [showAdvancedInputs, setShowAdvancedInputs] = useState(false);
+  const [averageWindow, setAverageWindow] = useState(14);
+  const [reportStartDate, setReportStartDate] = useState(getDateDaysAgoValue(13));
+  const [reportEndDate, setReportEndDate] = useState(today);
+  const [reportError, setReportError] = useState('');
+  const [reportSuccess, setReportSuccess] = useState('');
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   const [glucoseValue, setGlucoseValue] = useState('');
   const [viewDate, setViewDate] = useState(today);
@@ -96,9 +128,49 @@ export default function Dashboard() {
     }
   };
 
+  const fetchAverageData = async (daysToLoad = averageWindow) => {
+    setAverageLoading(true);
+    setAverageError('');
+
+    try {
+      const res = await API.get(`/glucose/averages?days=${daysToLoad}`);
+      setAverageData(Array.isArray(res.data?.intervals) ? res.data.intervals : []);
+    } catch (err) {
+      console.error('Error fetching glucose averages:', err);
+      setAverageError('Unable to load average glucose trends.');
+      setAverageData([]);
+    } finally {
+      setAverageLoading(false);
+    }
+  };
+
+  const fetchInsights = async () => {
+    setInsightLoading(true);
+    setInsightError('');
+
+    try {
+      const res = await API.get(`/glucose/insights?days=${INSIGHT_WINDOW}`);
+      setInsights(Array.isArray(res.data?.insights) ? res.data.insights : []);
+    } catch (err) {
+      console.error('Error fetching glucose insights:', err);
+      setInsightError('Unable to load pattern-based recommendations.');
+      setInsights([]);
+    } finally {
+      setInsightLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchData(viewDate);
   }, [viewDate]);
+
+  useEffect(() => {
+    fetchAverageData(averageWindow);
+  }, [averageWindow]);
+
+  useEffect(() => {
+    fetchInsights();
+  }, []);
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -137,6 +209,11 @@ export default function Dashboard() {
     calculatorPlannedExercise,
   ]);
 
+  useEffect(() => {
+    setReportError('');
+    setReportSuccess('');
+  }, [reportStartDate, reportEndDate]);
+
   const handleAddGlucose = async () => {
     const numericGlucose = Number(glucoseValue);
 
@@ -161,6 +238,7 @@ export default function Dashboard() {
 
       setGlucoseValue('');
       setReadingTime(getLocalTimeValue());
+      await Promise.all([fetchAverageData(averageWindow), fetchInsights()]);
 
       if (readingDate !== viewDate) {
         setViewDate(readingDate);
@@ -253,6 +331,7 @@ export default function Dashboard() {
       setDoseResult(null);
       setFinalDose('');
       setCalculatorCarbs('');
+      await Promise.all([fetchAverageData(averageWindow), fetchInsights()]);
 
       if (calculatorDate !== viewDate) {
         setViewDate(calculatorDate);
@@ -264,6 +343,43 @@ export default function Dashboard() {
       setCalculatorError(err.response?.data?.error || 'Unable to log insulin dose.');
     } finally {
       setIsConfirmingDose(false);
+    }
+  };
+
+  const handleGenerateReport = async () => {
+    if (!reportStartDate || !reportEndDate) {
+      setReportError('Select both a start and end date for the report.');
+      return;
+    }
+
+    if (reportEndDate < reportStartDate) {
+      setReportError('End date must be on or after the start date.');
+      return;
+    }
+
+    const dayCount = calculateInclusiveDayCount(reportStartDate, reportEndDate);
+    if (dayCount > MAX_REPORT_DAYS) {
+      setReportError(`Report range must be ${MAX_REPORT_DAYS} days or fewer.`);
+      return;
+    }
+
+    setIsGeneratingReport(true);
+    setReportError('');
+    setReportSuccess('');
+
+    try {
+      const res = await API.get(
+        `/reports/summary?startDate=${reportStartDate}&endDate=${reportEndDate}`
+      );
+      const report = res.data;
+      const chartImageDataUrl = await createReportChartImageDataUrl(report);
+      const fileName = await downloadReportPdf(report, chartImageDataUrl);
+      setReportSuccess(`Downloaded ${fileName}.`);
+    } catch (err) {
+      console.error('Error generating report:', err);
+      setReportError(err.response?.data?.error || 'Unable to generate the PDF report.');
+    } finally {
+      setIsGeneratingReport(false);
     }
   };
 
@@ -576,9 +692,97 @@ export default function Dashboard() {
           ) : null}
         </div>
 
-        <div className="card">
-          <h3>Daily Summary</h3>
-          <p>Coming soon</p>
+        <div className="card card--wide">
+          <h3>Clinical Report</h3>
+          <p className="card-copy">
+            Generate a downloadable PDF with summary metrics, key insights, a glucose trend chart, and 2-hour time-of-day averages.
+          </p>
+
+          <div className="report-controls">
+            <label>
+              Start date
+              <input
+                type="date"
+                value={reportStartDate}
+                onChange={(e) => setReportStartDate(e.target.value)}
+              />
+            </label>
+
+            <label>
+              End date
+              <input
+                type="date"
+                value={reportEndDate}
+                onChange={(e) => setReportEndDate(e.target.value)}
+              />
+            </label>
+
+            <button
+              type="button"
+              className="button-primary"
+              onClick={handleGenerateReport}
+              disabled={isGeneratingReport}
+            >
+              {isGeneratingReport ? 'Generating...' : 'Generate report'}
+            </button>
+          </div>
+
+          {reportError ? <p className="form-error">{reportError}</p> : null}
+          {reportSuccess ? <p className="form-success">{reportSuccess}</p> : null}
+
+          <p className="report-note">
+            Reports are limited to {MAX_REPORT_DAYS} days and only include data for the signed-in user.
+          </p>
+        </div>
+
+        <div className="card card--wide">
+          <div className="averages-header">
+            <div>
+              <h3>Time-of-Day Averages</h3>
+              <p className="card-copy">Average glucose across each 2-hour interval over recent history.</p>
+            </div>
+
+            <div className="window-toggle" role="tablist" aria-label="Average glucose time window">
+              {AVERAGE_WINDOWS.map((days) => (
+                <button
+                  key={days}
+                  type="button"
+                  className={`window-toggle__button ${averageWindow === days ? 'window-toggle__button--active' : ''}`}
+                  onClick={() => setAverageWindow(days)}
+                >
+                  {days} days
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {averageError ? <p className="form-error">{averageError}</p> : null}
+
+          {averageLoading ? (
+            <p>Loading averages...</p>
+          ) : (
+            <GlucoseAverageChart
+              data={averageData}
+              days={averageWindow}
+              targetMin={settings?.target_min}
+              targetMax={settings?.target_max}
+            />
+          )}
+        </div>
+
+        <div className="card card--wide">
+          <h3>Pattern-Based Insights</h3>
+          <p className="card-copy">
+            Rule-based observations from the last {INSIGHT_WINDOW} days. Educational support only.
+          </p>
+
+          {insightError ? <p className="form-error">{insightError}</p> : null}
+
+          {insightLoading ? (
+            <p>Loading insights...</p>
+          ) : (
+            <InsightList insights={insights} days={INSIGHT_WINDOW} />
+          )}
         </div>
       </div>
     </div>

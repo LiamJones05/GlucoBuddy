@@ -80,6 +80,8 @@ function getXDomain(data) {
 }
 
 export default function GlucoseChart({ data, selectedDate, targetMin, targetMax }) {
+  const isMobile = window.innerWidth < 768;
+
   const hasTargetRange =
     Number.isFinite(targetMin) &&
     Number.isFinite(targetMax) &&
@@ -94,8 +96,13 @@ export default function GlucoseChart({ data, selectedDate, targetMin, targetMax 
       <h3>Glucose Levels</h3>
       <p className="chart-subtitle">Showing readings for {selectedDate}</p>
 
-      <ResponsiveContainer width="100%" height={280}>
-        <LineChart data={data} margin={{ top: 16, right: 16, bottom: 8, left: 0 }}>
+      <ResponsiveContainer width="100%" aspect={isMobile ? 1.2 : 1.8}>
+        <LineChart data={data} margin={{
+          top: isMobile ? 8 : 16,
+          right: isMobile ? 8 : 16,
+          bottom: 8,
+          left: isMobile ? 0 : 8
+        }}>
           <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
 
           {hasTargetRange ? (
@@ -114,17 +121,25 @@ export default function GlucoseChart({ data, selectedDate, targetMin, targetMax 
             dataKey="minutesSinceMidnight"
             domain={xDomain}
             tickFormatter={formatMinutes}
-            tickCount={6}
+            tickCount={isMobile ? 4 : 6}
+            tick={{fontSize: isMobile ? 10 : 12}}
           />
-          <YAxis yAxisId="glucose" domain={yDomain} tickCount={6} width={56} />
+          <YAxis
+            yAxisId="glucose"
+            domain={yDomain}
+            tickCount={isMobile ? 4 : 6}
+            width={isMobile ? 40 : 56}
+            tick={{ fontSize: isMobile ? 10 : 12 }}
+          />
 
           {hasIobData ? (
             <YAxis
               yAxisId="iob"
               orientation="right"
               domain={iobDomain}
-              tickCount={5}
-              width={44}
+              tickCount={isMobile ? 3 : 5}
+              width={isMobile ? 32 : 44}
+              tick={{ fontSize: isMobile ? 10 : 12 }}
             />
           ) : null}
 
@@ -138,7 +153,7 @@ export default function GlucoseChart({ data, selectedDate, targetMin, targetMax 
               return [`${value} mmol/L`, 'Glucose'];
             }}
           />
-          <Legend />
+          {!isMobile && <Legend />}
 
           <ReferenceLine
             yAxisId="glucose"
@@ -147,7 +162,11 @@ export default function GlucoseChart({ data, selectedDate, targetMin, targetMax 
             strokeDasharray="6 6"
             strokeWidth={2}
             ifOverflow="extendDomain"
-            label={{ value: 'Low (4.0)', position: 'right', fill: '#dc2626' }}
+            label={
+              isMobile
+                ? false
+                : { value: 'Low (4.0)', position: 'right', fill: '#dc2626' }
+            }
           />
 
           <Line
@@ -157,8 +176,8 @@ export default function GlucoseChart({ data, selectedDate, targetMin, targetMax 
             yAxisId="glucose"
             stroke="#3b82f6"
             strokeWidth={2}
-            dot={{ r: 4 }}
-            activeDot={{ r: 6 }}
+            dot={{ r: isMobile ? 2 : 4 }}
+            activeDot={{ r: isMobile ? 4 : 6 }}
             connectNulls
           />
 

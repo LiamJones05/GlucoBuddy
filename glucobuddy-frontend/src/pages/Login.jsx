@@ -9,15 +9,18 @@ export default function Login() {
   const navigate = useNavigate();
 
   const handleLogin = async () => {
-    try {
-      const res = await API.post('/auth/login', form);
-      localStorage.setItem('token', res.data.token);
-      navigate('/dashboard');
-    } catch (err) {
-      console.error(err);
-      alert('Login failed');
-    }
-  };
+  try {
+    const res = await API.post('/auth/login', form);
+    localStorage.setItem('token', res.data.token);
+    navigate('/dashboard');
+  } catch (err) {
+    console.error('FULL ERROR:', err);
+    console.log('STATUS:', err.response?.status);
+    console.log('DATA:', err.response?.data);
+
+    alert(err.response?.data?.error || 'Login failed');
+  }
+};
 
  return (
   <div className="auth-container">
@@ -25,7 +28,7 @@ export default function Login() {
       
       <img src={logo} alt="GlucoBuddy Logo" className="auth-logo-img" />
 
-      {/* 👇 ADD INPUTS HERE */}
+      
       <input
         className="auth-input"
         placeholder="Email Address"

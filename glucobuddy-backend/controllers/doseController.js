@@ -1,4 +1,4 @@
-const { pool, poolConnect, sql } = require('../db');
+﻿const { pool, poolConnect, sql } = require('../db');
 const {
   INSULIN_ACTION_HOURS,
   calculateAdvancedAdjustments,
@@ -8,9 +8,20 @@ const {
 } = require('../utils/doseMath');
 const {
   DATE_TIME_PATTERN,
+  formatLocalDateTime,
   normaliseDateTime,
   parseLocalDateTime,
 } = require('../utils/dateTime');
+
+const INSULIN_LOGGED_AT_SQL = `
+  CAST(
+    CONCAT(
+      CONVERT(varchar(10), logged_date, 23),
+      'T',
+      CONVERT(varchar(8), logged_time, 108)
+    ) AS datetime2(0)
+  )
+`;
 
 exports.calculateDose = async (req, res) => {
   const {
@@ -23,6 +34,7 @@ exports.calculateDose = async (req, res) => {
     recent_exercise_minutes,
     planned_exercise_minutes,
   } = req.body;
+
   const numericGlucose = Number(glucose);
   const numericCarbs = Number(carbs);
   const numericProtein = Number(protein_grams || 0);
@@ -60,16 +72,22 @@ exports.calculateDose = async (req, res) => {
   }
 
   if (calculation_time && !DATE_TIME_PATTERN.test(calculation_time)) {
-    return res.status(400).json({ error: 'calculation_time must be in YYYY-MM-DDTHH:mm or YYYY-MM-DDTHH:mm:ss format' });
+    return res.status(400).json({
+      error: 'calculation_time must be in YYYY-MM-DDTHH:mm or YYYY-MM-DDTHH:mm:ss format',
+    });
   }
 
   try {
     await poolConnect;
 
-    // Get settings
-    const settingsResult = await pool.request()
-      .input('user_id', req.user.id)
-      .query(`SELECT * FROM UserSettings WHERE user_id = @user_id`);
+    const settingsResult = await pool
+      .request()
+      .input('user_id', sql.Int, req.user.id)
+      .query(`
+        SELECT *
+        FROM UserSettings
+        WHERE user_id = @user_id
+      `);
 
     const settings = settingsResult.recordset[0];
 
@@ -77,8 +95,8 @@ exports.calculateDose = async (req, res) => {
       return res.status(400).json({ error: 'Settings not found' });
     }
 
-    const calculationTimeText = calculation_time ? normaliseDateTime(calculation_time) : null;
-    const calculationTime = calculationTimeText ? parseLocalDateTime(calculationTimeText) : new Date();
+    const calculationTimeText = calculation_time ? normaliseDateTime(calculation_time) : formatLocalDateTime();
+    const calculationTime = parseLocalDateTime(calculationTimeText);
     const carbRatio = getCarbRatioForTime(settings, calculationTime);
     const correctionRatio = Number(settings.correction_ratio);
     const targetMax = Number(settings.target_max);
@@ -91,10 +109,8 @@ exports.calculateDose = async (req, res) => {
       return res.status(400).json({ error: 'Your correction ratio setting must be greater than zero' });
     }
 
-    // Carb dose
     const carbDose = numericCarbs / carbRatio;
 
-    // Correction dose
     let correctionDose = 0;
     if (numericGlucose > targetMax) {
       correctionDose = (numericGlucose - targetMax) / correctionRatio;
@@ -111,44 +127,30 @@ exports.calculateDose = async (req, res) => {
       baseDose: carbDose + correctionDose,
     });
 
-    // Calculate IOB
     const insulinWindowStart = new Date(
       calculationTime.getTime() - (INSULIN_ACTION_HOURS * 60 * 60 * 1000)
     );
 
-    const insulinResult = await pool.request()
+    const insulinResult = await pool
+      .request()
       .input('user_id', sql.Int, req.user.id)
       .input('window_start', sql.DateTime2, insulinWindowStart)
       .input('calculation_time', sql.DateTime2, calculationTime)
       .query(`
         SELECT
-  units,
-  CONCAT(
-    CONVERT(varchar(10), logged_date, 23),
-    'T',
-    CONVERT(varchar(8), logged_time, 108)
-  ) AS logged_at
-FROM InsulinLogs
-WHERE user_id = @user_id
-  AND (
-    CAST(
-      CONCAT(
-        CONVERT(varchar(10), logged_date, 23),
-        'T',
-        CONVERT(varchar(8), logged_time, 108)
-      ) AS datetime2
-    ) >= @window_start
-  )
-  AND (
-    CAST(
-      CONCAT(
-        CONVERT(varchar(10), logged_date, 23),
-        'T',
-        CONVERT(varchar(8), logged_time, 108)
-      ) AS datetime2
-    ) <= @calculation_time
-  )
-ORDER BY logged_date ASC, logged_time ASC
+          units,
+          CONCAT(
+            CONVERT(varchar(10), logged_date, 23),
+            'T',
+            CONVERT(varchar(8), logged_time, 108)
+          ) AS logged_at
+        FROM InsulinLogs
+        WHERE user_id = @user_id
+          AND logged_date IS NOT NULL
+          AND logged_time IS NOT NULL
+          AND ${INSULIN_LOGGED_AT_SQL} >= @window_start
+          AND ${INSULIN_LOGGED_AT_SQL} <= @calculation_time
+        ORDER BY logged_date ASC, logged_time ASC
       `);
 
     const iob = calculateInsulinOnBoard(insulinResult.recordset, calculationTime);
@@ -160,7 +162,6 @@ ORDER BY logged_date ASC, logged_time ASC
     const iobApplied = Math.min(iob, correctionDose);
     const netCorrectionDose = Math.max(0, correctionDose - iobApplied);
 
-    // Final dose
     let recommendedDose =
       carbDose +
       proteinDose +
@@ -170,14 +171,14 @@ ORDER BY logged_date ASC, logged_time ASC
       recentExerciseReduction -
       plannedExerciseReduction;
 
-    // Safety: no negative dose
-    if (recommendedDose < 0) recommendedDose = 0;
+    if (recommendedDose < 0) {
+      recommendedDose = 0;
+    }
 
-    //: round to 0.5 units
     recommendedDose = roundToHalfUnit(recommendedDose);
 
-    // Save calculation
-    await pool.request()
+    await pool
+      .request()
       .input('user_id', sql.Int, req.user.id)
       .input('glucose', sql.Float, numericGlucose)
       .input('carbs', sql.Float, numericCarbs)
@@ -187,9 +188,7 @@ ORDER BY logged_date ASC, logged_time ASC
         VALUES (@user_id, @glucose, @carbs, @dose)
       `);
 
-      
-
-    res.json({
+    return res.json({
       recommendedDose,
       breakdown: {
         carbDose: Number(carbDose.toFixed(2)),
@@ -197,11 +196,10 @@ ORDER BY logged_date ASC, logged_time ASC
         netCorrectionDose: Number(netCorrectionDose.toFixed(2)),
         iobAvailable: Number(iob.toFixed(2)),
         iobApplied: Number(iobApplied.toFixed(2)),
+        iob: Number(iob.toFixed(2)),
         advanced: advancedAdjustments,
       },
-      calculationTime: calculationTimeText || normaliseDateTime(
-        `${calculationTime.getFullYear()}-${String(calculationTime.getMonth() + 1).padStart(2, '0')}-${String(calculationTime.getDate()).padStart(2, '0')}T${String(calculationTime.getHours()).padStart(2, '0')}:${String(calculationTime.getMinutes()).padStart(2, '0')}:${String(calculationTime.getSeconds()).padStart(2, '0')}`
-      ),
+      calculationTime: calculationTimeText,
       carbRatio: Number(carbRatio.toFixed(2)),
       insulinActionHours: INSULIN_ACTION_HOURS,
       advancedUsed:
@@ -211,8 +209,8 @@ ORDER BY logged_date ASC, logged_time ASC
         numericRecentExercise > 0 ||
         numericPlannedExercise > 0,
     });
-
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('CALCULATE DOSE ERROR:', err);
+    return res.status(500).json({ error: err.message });
   }
 };

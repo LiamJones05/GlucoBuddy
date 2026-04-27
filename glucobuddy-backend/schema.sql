@@ -1,4 +1,4 @@
-IF DB_ID(N'GlucoBuddyData') IS NULL
+﻿IF DB_ID(N'GlucoBuddyData') IS NULL
 BEGIN
     CREATE DATABASE GlucoBuddyData;
 END
@@ -60,7 +60,8 @@ BEGIN
         user_id INT NOT NULL,
         units DECIMAL(6,2) NOT NULL,
         insulin_type NVARCHAR(50) NOT NULL,
-        logged_at DATETIME2(0) NOT NULL CONSTRAINT DF_InsulinLogs_logged_at DEFAULT SYSUTCDATETIME(),
+        logged_date DATE NOT NULL,
+        logged_time TIME(0) NOT NULL,
         created_at DATETIME2(0) NOT NULL CONSTRAINT DF_InsulinLogs_created_at DEFAULT SYSUTCDATETIME(),
         CONSTRAINT FK_InsulinLogs_Users
             FOREIGN KEY (user_id) REFERENCES dbo.Users(id) ON DELETE CASCADE
@@ -113,12 +114,12 @@ GO
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = N'IX_InsulinLogs_User_LoggedAt'
+    WHERE name = N'IX_InsulinLogs_User_Date_Time'
       AND object_id = OBJECT_ID(N'dbo.InsulinLogs')
 )
 BEGIN
-    CREATE INDEX IX_InsulinLogs_User_LoggedAt
-        ON dbo.InsulinLogs (user_id, logged_at DESC);
+    CREATE INDEX IX_InsulinLogs_User_Date_Time
+        ON dbo.InsulinLogs (user_id, logged_date, logged_time);
 END
 GO
 
@@ -145,3 +146,5 @@ BEGIN
         ON dbo.DoseCalculations (user_id, created_at DESC);
 END
 GO
+
+
