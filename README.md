@@ -35,7 +35,7 @@ To design and develop a comprehensive diabetes management system that supports a
 ## Key Features
 
 - User authentication (register/login)
-- ⚙Personalised diabetes settings
+- Personalised diabetes settings
 - Glucose tracking
 - Insulin logging
 - Meal tracking
@@ -167,5 +167,6 @@ GlucoBuddy provides a structured and extensible platform for diabetes management
 ---
 
 ## Author
-Liam
-Computer Science Student
+Liam Jones
+
+3rd Year Computer Science Student
