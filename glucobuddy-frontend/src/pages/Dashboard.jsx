@@ -59,6 +59,7 @@ export default function Dashboard() {
   const [isSaving, setIsSaving] = useState(false);
   const [calculatorError, setCalculatorError] = useState('');
   const [calculatorSuccess, setCalculatorSuccess] = useState('');
+  const [calculatorWarning, setCalculatorWarning] = useState(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const [isConfirmingDose, setIsConfirmingDose] = useState(false);
   const [doseResult, setDoseResult] = useState(null);
@@ -193,7 +194,7 @@ export default function Dashboard() {
     if (!doseResult) {
       return;
     }
-
+    setCalculatorWarning(null);
     setDoseResult(null);
     setFinalDose('');
     setCalculatorSuccess('');
@@ -286,15 +287,24 @@ export default function Dashboard() {
         alcohol_units: Number(calculatorAlcohol || 0),
         recent_exercise_minutes: Number(calculatorRecentExercise || 0),
         planned_exercise_minutes: Number(calculatorPlannedExercise || 0),
+        
       });
+      console.log('Dose response:', res.data);
 
       setDoseResult(res.data);
       setFinalDose(String(res.data.recommendedDose));
+
+      if (res.data.warning) {
+        setCalculatorWarning(res.data.warning);
+      } else {
+        setCalculatorWarning(null);
+      }
     } catch (err) {
       console.error('Error calculating dose:', err);
       setDoseResult(null);
       setFinalDose('');
       setCalculatorError(err.response?.data?.error || 'Unable to calculate dose.');
+      setCalculatorWarning(null);
     } finally {
       setIsCalculating(false);
     }
@@ -485,7 +495,7 @@ export default function Dashboard() {
           )}
         </div>
 
-        <div className="card">
+        <div className="card card--wide">
           <h3>Insulin Calculator</h3>
           <p className="card-copy">
             Educational support only. Review the recommendation, adjust if needed, then confirm to log insulin and update IOB on the chart.
@@ -625,7 +635,7 @@ export default function Dashboard() {
               type="button"
               className="button-secondary"
               onClick={handleConfirmDose}
-              disabled={isConfirmingDose || !doseResult}
+              disabled={isConfirmingDose || !doseResult || doseResult?.hypo}
             >
               {isConfirmingDose ? 'Logging...' : 'Confirm and log'}
             </button>
@@ -633,8 +643,25 @@ export default function Dashboard() {
 
           {calculatorError ? <p className="form-error">{calculatorError}</p> : null}
           {calculatorSuccess ? <p className="form-success">{calculatorSuccess}</p> : null}
+          {calculatorWarning && calculatorWarning.type === 'hypo' ? (
+          <div className="warning-hypo">
+            <strong>{calculatorWarning.message}</strong>
+            <p>{calculatorWarning.action}</p>
+          </div>
+        ) : null}
 
-          {doseResult ? (
+          {doseResult?.hypo ? (
+            <div className="dose-summary">
+              <div className="dose-summary__header">
+                <h4>Recommendation</h4>
+                <strong>Do not take insulin</strong>
+              </div>
+
+              <p className="insulin-note">
+                Treat low blood sugar with fast-acting carbohydrates before taking insulin.
+              </p>
+            </div>
+          ) : doseResult ? (
             <div className="dose-summary">
               <div className="dose-summary__header">
                 <h4>Recommended dose</h4>
@@ -655,35 +682,30 @@ export default function Dashboard() {
               <div className="dose-breakdown">
                 <p>Carb coverage: {carbDose.toFixed(2)} units</p>
                 <p>Correction before IOB: {correctionDose.toFixed(2)} units</p>
-                {proteinDose > 0 ? (
-                  <p>Protein adjustment: +{proteinDose.toFixed(2)} units</p>
-                ) : null}
-                {fatDose > 0 ? (
-                  <p>Fat adjustment: +{fatDose.toFixed(2)} units</p>
-                ) : null}
-                {alcoholReduction > 0 ? (
-                  <p>Alcohol reduction: -{alcoholReduction.toFixed(2)} units</p>
-                ) : null}
-                {recentExerciseReduction > 0 ? (
-                  <p>Recent exercise reduction: -{recentExerciseReduction.toFixed(2)} units</p>
-                ) : null}
-                {plannedExerciseReduction > 0 ? (
-                  <p>Expected exercise reduction: -{plannedExerciseReduction.toFixed(2)} units</p>
-                ) : null}
+
+                {proteinDose > 0 && <p>Protein adjustment: +{proteinDose.toFixed(2)} units</p>}
+                {fatDose > 0 && <p>Fat adjustment: +{fatDose.toFixed(2)} units</p>}
+                {alcoholReduction > 0 && <p>Alcohol reduction: -{alcoholReduction.toFixed(2)} units</p>}
+                {recentExerciseReduction > 0 && <p>Recent exercise reduction: -{recentExerciseReduction.toFixed(2)} units</p>}
+                {plannedExerciseReduction > 0 && <p>Expected exercise reduction: -{plannedExerciseReduction.toFixed(2)} units</p>}
+
                 <p>IOB available: {iobAvailable.toFixed(2)} units</p>
                 <p>IOB applied to correction: -{iobApplied.toFixed(2)} units</p>
                 <p>Correction after IOB: {netCorrectionDose.toFixed(2)} units</p>
-                <p>Carb ratio used: 1:{doseResult.carbRatio.toFixed(2)}</p>
+
+                <p>
+                  Carb ratio used: 1:{doseResult?.carbRatio ? doseResult.carbRatio.toFixed(2) : '-'}
+                </p>
               </div>
 
-              {advancedUsed ? (
+              {advancedUsed && (
                 <div className="dose-assumptions">
                   <p className="dose-assumptions__title">Advanced assumptions used</p>
                   {advancedAssumptions.map((assumption) => (
                     <p key={assumption}>{assumption}</p>
                   ))}
                 </div>
-              ) : null}
+              )}
 
               <p className="insulin-note">
                 IOB uses a {doseResult.insulinActionHours || INSULIN_ACTION_HOURS}-hour linear decay model and is only applied against correction insulin, not meal coverage.

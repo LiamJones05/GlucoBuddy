@@ -70,12 +70,27 @@ exports.calculateDose = async (req, res) => {
   if (!Number.isFinite(numericPlannedExercise) || numericPlannedExercise < 0) {
     return res.status(400).json({ error: 'planned_exercise_minutes must be zero or greater' });
   }
+  const HYPO_THRESHOLD = 4.0;
+
+  if (numericGlucose < HYPO_THRESHOLD) {
+    return res.json({
+      recommendedDose: 0,
+      hypo: true,
+      warning: {
+        type: 'hypo',
+        message: 'Low blood sugar detected',
+        action: 'Eat 12g fast-acting carbohydrates',
+        carbs: 12,
+      },
+    });
+  }
 
   if (calculation_time && !DATE_TIME_PATTERN.test(calculation_time)) {
     return res.status(400).json({
       error: 'calculation_time must be in YYYY-MM-DDTHH:mm or YYYY-MM-DDTHH:mm:ss format',
     });
   }
+    
 
   try {
     await poolConnect;
@@ -99,7 +114,9 @@ exports.calculateDose = async (req, res) => {
     const calculationTime = parseLocalDateTime(calculationTimeText);
     const carbRatio = getCarbRatioForTime(settings, calculationTime);
     const correctionRatio = Number(settings.correction_ratio);
+    const targetMin = Number(settings.target_min);
     const targetMax = Number(settings.target_max);
+    const targetGlucose = (targetMin + targetMax) / 2;
 
     if (!Number.isFinite(carbRatio) || carbRatio <= 0) {
       return res.status(400).json({ error: 'Your carb ratio settings must be greater than zero' });
@@ -112,8 +129,8 @@ exports.calculateDose = async (req, res) => {
     const carbDose = numericCarbs / carbRatio;
 
     let correctionDose = 0;
-    if (numericGlucose > targetMax) {
-      correctionDose = (numericGlucose - targetMax) / correctionRatio;
+    if (numericGlucose > targetGlucose) {
+      correctionDose = (numericGlucose - targetGlucose) / correctionRatio;
     }
 
     const advancedAdjustments = calculateAdvancedAdjustments({
@@ -193,6 +210,7 @@ exports.calculateDose = async (req, res) => {
       breakdown: {
         carbDose: Number(carbDose.toFixed(2)),
         correctionDose: Number(correctionDose.toFixed(2)),
+        targetGlucose: Number(targetGlucose.toFixed(1)),
         netCorrectionDose: Number(netCorrectionDose.toFixed(2)),
         iobAvailable: Number(iob.toFixed(2)),
         iobApplied: Number(iobApplied.toFixed(2)),

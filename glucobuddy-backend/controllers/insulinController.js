@@ -32,15 +32,34 @@ async function insulinTableHasLoggedAtColumn(transaction) {
 exports.createInsulin = async (req, res) => {
   const { units, insulin_type, logged_at, glucose_level } = req.body;
   const numericUnits = Number(units);
-  const insulinType = typeof insulin_type === 'string' ? insulin_type.trim() : '';
+  const VALID_INSULIN_TYPES = ['rapid', 'long'];
+
+// Default to rapid if missing/invalid
+const insulinType = VALID_INSULIN_TYPES.includes(
+  (insulin_type || '').toLowerCase().trim()
+)
+  ? insulin_type.toLowerCase().trim()
+  : 'rapid';
   const numericGlucose =
     glucose_level === undefined || glucose_level === null || glucose_level === ''
       ? null
       : Number(glucose_level);
 
-  if (!Number.isFinite(numericUnits) || numericUnits <= 0) {
-    return res.status(400).json({ error: 'units must be a positive number' });
+  const MAX_INSULIN_UNITS = 50;
+
+  if (!Number.isFinite(numericUnits)) {
+  return res.status(400).json({ error: 'units must be a number' });
   }
+
+  if (numericUnits <= 0) {
+    return res.status(400).json({ error: 'units must be greater than 0' });
+  }
+
+  if (numericUnits > MAX_INSULIN_UNITS) {
+    return res.status(400).json({ error: `units must not exceed ${MAX_INSULIN_UNITS}` });
+  }
+    
+  
 
   if (!insulinType) {
     return res.status(400).json({ error: 'insulin_type is required' });
@@ -52,7 +71,9 @@ exports.createInsulin = async (req, res) => {
     });
   }
 
-  if (numericGlucose !== null && (!Number.isFinite(numericGlucose) || numericGlucose <= 0)) {
+  if (
+  numericGlucose !== null &&
+  (!Number.isFinite(numericGlucose) || numericGlucose <= 0 || numericGlucose > 30)){
     return res.status(400).json({
       error: 'glucose_level must be a positive number when provided',
     });
