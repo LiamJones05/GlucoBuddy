@@ -1,11 +1,6 @@
 ﻿const { pool, poolConnect, sql } = require('../db');
-const {
-  INSULIN_ACTION_HOURS,
-  calculateAdvancedAdjustments,
-  calculateInsulinOnBoard,
-  getCarbRatioForTime,
-  roundToHalfUnit,
-} = require('../utils/doseMath');
+const { INSULIN_ACTION_HOURS } = require('../services/iobEngine');
+const { calculateDoseRecommendation } = require('../services/doseEngine');
 const {
   DATE_TIME_PATTERN,
   formatLocalDateTime,
@@ -13,6 +8,7 @@ const {
   parseLocalDateTime,
 } = require('../utils/dateTime');
 
+const HYPO_THRESHOLD = 4.0;
 const INSULIN_LOGGED_AT_SQL = `
   CAST(
     CONCAT(
@@ -23,74 +19,64 @@ const INSULIN_LOGGED_AT_SQL = `
   )
 `;
 
+function parseDoseInputs(body) {
+  return {
+    glucose: Number(body.glucose),
+    carbs: Number(body.carbs),
+    proteinGrams: Number(body.protein_grams || 0),
+    fatGrams: Number(body.fat_grams || 0),
+    alcoholUnits: Number(body.alcohol_units || 0),
+    recentExerciseMinutes: Number(body.recent_exercise_minutes || 0),
+    plannedExerciseMinutes: Number(body.planned_exercise_minutes || 0),
+  };
+}
+
+function validateInputs(inputs) {
+  const checks = [
+    ['glucose', inputs.glucose, (value) => value > 0, 'glucose must be a positive number'],
+    ['carbs', inputs.carbs, (value) => value >= 0, 'carbs must be zero or greater'],
+    ['protein_grams', inputs.proteinGrams, (value) => value >= 0, 'protein_grams must be zero or greater'],
+    ['fat_grams', inputs.fatGrams, (value) => value >= 0, 'fat_grams must be zero or greater'],
+    ['alcohol_units', inputs.alcoholUnits, (value) => value >= 0, 'alcohol_units must be zero or greater'],
+    ['recent_exercise_minutes', inputs.recentExerciseMinutes, (value) => value >= 0, 'recent_exercise_minutes must be zero or greater'],
+    ['planned_exercise_minutes', inputs.plannedExerciseMinutes, (value) => value >= 0, 'planned_exercise_minutes must be zero or greater'],
+  ];
+
+  for (const [, value, validator, message] of checks) {
+    if (!Number.isFinite(value) || !validator(value)) {
+      return message;
+    }
+  }
+
+  return null;
+}
+
 exports.calculateDose = async (req, res) => {
-  const {
-    glucose,
-    carbs,
-    calculation_time,
-    protein_grams,
-    fat_grams,
-    alcohol_units,
-    recent_exercise_minutes,
-    planned_exercise_minutes,
-  } = req.body;
+  const inputs = parseDoseInputs(req.body);
+  const validationError = validateInputs(inputs);
 
-  const numericGlucose = Number(glucose);
-  const numericCarbs = Number(carbs);
-  const numericProtein = Number(protein_grams || 0);
-  const numericFat = Number(fat_grams || 0);
-  const numericAlcohol = Number(alcohol_units || 0);
-  const numericRecentExercise = Number(recent_exercise_minutes || 0);
-  const numericPlannedExercise = Number(planned_exercise_minutes || 0);
-
-  if (!Number.isFinite(numericGlucose) || numericGlucose <= 0) {
-    return res.status(400).json({ error: 'glucose must be a positive number' });
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
   }
 
-  if (!Number.isFinite(numericCarbs) || numericCarbs < 0) {
-    return res.status(400).json({ error: 'carbs must be zero or greater' });
-  }
-
-  if (!Number.isFinite(numericProtein) || numericProtein < 0) {
-    return res.status(400).json({ error: 'protein_grams must be zero or greater' });
-  }
-
-  if (!Number.isFinite(numericFat) || numericFat < 0) {
-    return res.status(400).json({ error: 'fat_grams must be zero or greater' });
-  }
-
-  if (!Number.isFinite(numericAlcohol) || numericAlcohol < 0) {
-    return res.status(400).json({ error: 'alcohol_units must be zero or greater' });
-  }
-
-  if (!Number.isFinite(numericRecentExercise) || numericRecentExercise < 0) {
-    return res.status(400).json({ error: 'recent_exercise_minutes must be zero or greater' });
-  }
-
-  if (!Number.isFinite(numericPlannedExercise) || numericPlannedExercise < 0) {
-    return res.status(400).json({ error: 'planned_exercise_minutes must be zero or greater' });
-  }
-  const HYPO_THRESHOLD = 4.0;
-
-  if (numericGlucose < HYPO_THRESHOLD) {
+  if (inputs.glucose < HYPO_THRESHOLD) {
     return res.json({
       recommendedDose: 0,
       hypo: true,
       warning: {
         type: 'hypo',
         message: 'Low blood sugar detected',
-        action: 'Eat 12g fast-acting carbohydrates',
+        action: 'Consider fast-acting carbohydrates and rechecking glucose.',
         carbs: 12,
       },
     });
   }
 
-  if (calculation_time && !DATE_TIME_PATTERN.test(calculation_time)) {
+  if (req.body.calculation_time && !DATE_TIME_PATTERN.test(req.body.calculation_time)) {
     return res.status(400).json({
       error: 'calculation_time must be in YYYY-MM-DDTHH:mm or YYYY-MM-DDTHH:mm:ss format',
     });
   }
-    
 
   try {
     await poolConnect;
@@ -110,40 +96,10 @@ exports.calculateDose = async (req, res) => {
       return res.status(400).json({ error: 'Settings not found' });
     }
 
-    const calculationTimeText = calculation_time ? normaliseDateTime(calculation_time) : formatLocalDateTime();
+    const calculationTimeText = req.body.calculation_time
+      ? normaliseDateTime(req.body.calculation_time)
+      : formatLocalDateTime();
     const calculationTime = parseLocalDateTime(calculationTimeText);
-    const carbRatio = getCarbRatioForTime(settings, calculationTime);
-    const correctionRatio = Number(settings.correction_ratio);
-    const targetMin = Number(settings.target_min);
-    const targetMax = Number(settings.target_max);
-    const targetGlucose = (targetMin + targetMax) / 2;
-
-    if (!Number.isFinite(carbRatio) || carbRatio <= 0) {
-      return res.status(400).json({ error: 'Your carb ratio settings must be greater than zero' });
-    }
-
-    if (!Number.isFinite(correctionRatio) || correctionRatio <= 0) {
-      return res.status(400).json({ error: 'Your correction ratio setting must be greater than zero' });
-    }
-
-    const carbDose = numericCarbs / carbRatio;
-
-    let correctionDose = 0;
-    if (numericGlucose > targetGlucose) {
-      correctionDose = (numericGlucose - targetGlucose) / correctionRatio;
-    }
-
-    const advancedAdjustments = calculateAdvancedAdjustments({
-      proteinGrams: numericProtein,
-      fatGrams: numericFat,
-      alcoholUnits: numericAlcohol,
-      recentExerciseMinutes: numericRecentExercise,
-      plannedExerciseMinutes: numericPlannedExercise,
-      carbRatio,
-      correctionRatio,
-      baseDose: carbDose + correctionDose,
-    });
-
     const insulinWindowStart = new Date(
       calculationTime.getTime() - (INSULIN_ACTION_HOURS * 60 * 60 * 1000)
     );
@@ -170,62 +126,39 @@ exports.calculateDose = async (req, res) => {
         ORDER BY logged_date ASC, logged_time ASC
       `);
 
-    const iob = calculateInsulinOnBoard(insulinResult.recordset, calculationTime);
-    const proteinDose = advancedAdjustments.proteinDose;
-    const fatDose = advancedAdjustments.fatDose;
-    const alcoholReduction = advancedAdjustments.alcoholReduction;
-    const recentExerciseReduction = advancedAdjustments.recentExerciseReduction;
-    const plannedExerciseReduction = advancedAdjustments.plannedExerciseReduction;
-    const iobApplied = Math.min(iob, correctionDose);
-    const netCorrectionDose = Math.max(0, correctionDose - iobApplied);
+    let recommendation;
 
-    let recommendedDose =
-      carbDose +
-      proteinDose +
-      fatDose +
-      netCorrectionDose -
-      alcoholReduction -
-      recentExerciseReduction -
-      plannedExerciseReduction;
-
-    if (recommendedDose < 0) {
-      recommendedDose = 0;
+    try {
+      recommendation = calculateDoseRecommendation({
+        inputs,
+        settings,
+        insulinLogs: insulinResult.recordset,
+        calculationTime,
+      });
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
     }
-
-    recommendedDose = roundToHalfUnit(recommendedDose);
 
     await pool
       .request()
       .input('user_id', sql.Int, req.user.id)
-      .input('glucose', sql.Float, numericGlucose)
-      .input('carbs', sql.Float, numericCarbs)
-      .input('dose', sql.Float, recommendedDose)
+      .input('glucose', sql.Float, inputs.glucose)
+      .input('carbs', sql.Float, inputs.carbs)
+      .input('dose', sql.Float, recommendation.recommendedDose)
       .query(`
         INSERT INTO DoseCalculations (user_id, glucose_input, carbs_input, recommended_dose)
         VALUES (@user_id, @glucose, @carbs, @dose)
       `);
 
     return res.json({
-      recommendedDose,
-      breakdown: {
-        carbDose: Number(carbDose.toFixed(2)),
-        correctionDose: Number(correctionDose.toFixed(2)),
-        targetGlucose: Number(targetGlucose.toFixed(1)),
-        netCorrectionDose: Number(netCorrectionDose.toFixed(2)),
-        iobAvailable: Number(iob.toFixed(2)),
-        iobApplied: Number(iobApplied.toFixed(2)),
-        iob: Number(iob.toFixed(2)),
-        advanced: advancedAdjustments,
-      },
+      ...recommendation,
       calculationTime: calculationTimeText,
-      carbRatio: Number(carbRatio.toFixed(2)),
-      insulinActionHours: INSULIN_ACTION_HOURS,
       advancedUsed:
-        numericProtein > 0 ||
-        numericFat > 0 ||
-        numericAlcohol > 0 ||
-        numericRecentExercise > 0 ||
-        numericPlannedExercise > 0,
+        inputs.proteinGrams > 0 ||
+        inputs.fatGrams > 0 ||
+        inputs.alcoholUnits > 0 ||
+        inputs.recentExerciseMinutes > 0 ||
+        inputs.plannedExerciseMinutes > 0,
     });
   } catch (err) {
     console.error('CALCULATE DOSE ERROR:', err);

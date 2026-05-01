@@ -1,9 +1,11 @@
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+﻿import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import Navbar from './components/Navbar';
 
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import GlucoseLogging from './pages/GlucoseLogging';
+import Calculator from './pages/Calculator';
 import Settings from './pages/Settings';
 
 function hasToken() {
@@ -11,7 +13,7 @@ function hasToken() {
 }
 
 function PublicRoute({ children }) {
-  return hasToken() ? <Navigate to="/dashboard" replace /> : children;
+  return hasToken() ? <Navigate to="/analytics" replace /> : children;
 }
 
 function ProtectedRoute({ children }) {
@@ -55,11 +57,28 @@ function App() {
         />
 
         <Route element={<ProtectedLayout />}>
+          <Route path="/dashboard" element={<Navigate to="/analytics" replace />} />
           <Route
-            path="/dashboard"
+            path="/analytics"
             element={
               <ProtectedRoute>
                 <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/log-glucose"
+            element={
+              <ProtectedRoute>
+                <GlucoseLogging />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/calculator"
+            element={
+              <ProtectedRoute>
+                <Calculator />
               </ProtectedRoute>
             }
           />

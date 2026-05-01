@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import API from '../api/api';
 import { useNavigate } from 'react-router-dom';
 import {Link} from 'react-router-dom';
@@ -12,7 +12,10 @@ export default function Login() {
   try {
     const res = await API.post('/auth/login', form);
     localStorage.setItem('token', res.data.token);
-    navigate('/dashboard');
+    if (res.data.user?.name) {
+      localStorage.setItem('userName', res.data.user.name);
+    }
+    navigate('/analytics');
   } catch (err) {
     console.error('FULL ERROR:', err);
     console.log('STATUS:', err.response?.status);
@@ -65,3 +68,4 @@ export default function Login() {
 );
   
 }
+

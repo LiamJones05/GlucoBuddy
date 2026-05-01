@@ -1,3 +1,11 @@
+/* Global box sizing fix */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Main container */
 .settings {
   padding: 1.5rem;
 }
@@ -12,13 +20,15 @@
   margin-bottom: 1.5rem;
 }
 
-/* Card style (reuse dashboard look) */
+/* Card style */
 .settings-card {
   background: white;
   padding: 1rem;
   border-radius: 8px;
   border: 1px solid #e2e8f0;
   margin-bottom: 1rem;
+  width: 100%;
+  max-width: 600px;
 }
 
 .settings-card h3 {
@@ -26,20 +36,37 @@
   font-size: 1.1rem;
 }
 
+/* Labels */
+.settings-card label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 0.35rem;
+  margin-top: 0.75rem;
+}
+
+.settings-card label:first-of-type {
+  margin-top: 0;
+}
+
 /* Inputs */
-.settings-card input {
+.settings-card input,
+.modal input {
   width: 100%;
+  box-sizing: border-box;
   padding: 0.6rem 0.75rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
   border: 1px solid #cbd5e1;
   border-radius: 6px;
   font-size: 0.95rem;
   outline: none;
-  transition: border 0.2s ease;
+  transition: border 0.2s ease, box-shadow 0.2s ease;
 }
 
 .settings-card input:focus {
   border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
 }
 
 /* Save button */
@@ -51,29 +78,170 @@
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.95rem;
-  transition: background 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 .settings button:hover {
   background: #1d4ed8;
+  transform: translateY(-1px);
 }
 
-/* Desktop layout improvements */
+.settings button:active {
+  transform: translateY(0);
+}
+
+/* Desktop layout */
 @media (min-width: 768px) {
   .settings-card {
     max-width: 600px;
   }
 }
 
-.settings-card label {
-    display: block;
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: #475569;
-    margin-bottom: 0.35rem;
-    margin-top: 0.75rem;
+/* ========================= */
+/* 🔴 Danger Zone Styling */
+/* ========================= */
+
+.danger-zone {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e2e8f0;
+  border: 1px solid #fecaca;
+  background: #fff1f2;
+  position: relative;
+  overflow: hidden;
 }
 
-.settings-card label:first-of-type{
-    margin-top:0;
+.danger-zone::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 4px;
+  background: #dc2626;
+}
+
+.danger-zone h3 {
+  color: #991b1b;
+}
+
+.danger-text {
+  font-size: 0.9rem;
+  color: #7f1d1d;
+  margin-bottom: 0.75rem;
+}
+
+/* Delete button */
+.delete-btn {
+  background: #dc2626;
+  color: white;
+  padding: 0.55rem 0.9rem;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.15s ease;
+}
+
+.delete-btn:hover {
+  background: #b91c1c;
+  transform: translateY(-1px);
+}
+
+.delete-btn:active {
+  transform: translateY(0);
+}
+
+.delete-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ========================= */
+/* 🧾 Modal Styling */
+/* ========================= */
+
+/* Overlay */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+/* Modal container */
+.modal {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 360px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  animation: modalFade 0.2s ease;
+}
+
+/* Entrance animation */
+@keyframes modalFade {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal h2 {
+  margin-bottom: 0.75rem;
+}
+
+.modal p {
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+/* Modal actions */
+.modal-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 1rem;
+  gap: 0.5rem;
+}
+
+.modal-actions button:first-child {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.modal-actions button:first-child:hover {
+  background: #cbd5f5;
+}
+
+/* Error text */
+.error {
+  color: #dc2626;
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+}
+
+.download-btn {
+  background: #0f766e;
+  color: white;
+  padding: 0.55rem 0.9rem;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.download-btn:hover {
+  background: #0d5f5b;
 }

@@ -5,21 +5,16 @@ const {
   buildSqlTimeValue,
   splitLoggedAt,
 } = require('../utils/dateTime');
-const { buildPatternInsights } = require('../utils/glucoseInsights');
+const { buildPatternInsights } = require('../services/insightEngine');
+const { buildGlucosePrediction } = require('../services/predictionEngine');
+const {
+  calculateClinicalMetrics,
+  calculateTimeOfDayAverages,
+  assessDataQuality,
+  compareMetrics,
+} = require('../services/metricsEngine');
 
 const VALID_TIME_WINDOWS = new Set([14, 30, 90]);
-const TWO_HOUR_INTERVALS = Array.from({ length: 12 }, (_, bucketIndex) => {
-  const startHour = bucketIndex * 2;
-  const endHour = startHour + 2;
-  const shortHour = String(startHour).padStart(2, '0');
-  const shortEndHour = String(endHour).padStart(2, '0');
-
-  return {
-    bucketIndex,
-    label: `${shortHour}-${shortEndHour}`,
-    fullLabel: `${shortHour}:00-${shortEndHour}:00`,
-  };
-});
 
 function formatLocalDate(date = new Date()) {
   const year = date.getFullYear();
@@ -33,6 +28,71 @@ function shiftLocalDate(date, days) {
   const shifted = new Date(date);
   shifted.setDate(shifted.getDate() + days);
   return shifted;
+}
+
+async function loadSettings(userId) {
+  const result = await pool
+    .request()
+    .input('user_id', sql.Int, userId)
+    .query(`
+      SELECT *
+      FROM UserSettings
+      WHERE user_id = @user_id
+    `);
+
+  return result.recordset[0];
+}
+
+async function loadGlucoseRange(userId, startDate, endDate) {
+  const result = await pool
+    .request()
+    .input('user_id', sql.Int, userId)
+    .input('start_date', sql.Date, startDate)
+    .input('end_date', sql.Date, endDate)
+    .query(`
+      SELECT
+        id,
+        CAST(glucose_level AS FLOAT) AS glucose_level,
+        CONVERT(varchar(10), logged_date, 23) AS logged_date,
+        CONCAT(
+          CONVERT(varchar(10), logged_date, 23),
+          'T',
+          CONVERT(varchar(8), logged_time, 108)
+        ) AS logged_at
+      FROM GlucoseLogs
+      WHERE user_id = @user_id
+        AND logged_date >= @start_date
+        AND logged_date <= @end_date
+      ORDER BY logged_date ASC, logged_time ASC
+    `);
+
+  return result.recordset;
+}
+
+async function loadInsulinRange(userId, startDate, endDate) {
+  const result = await pool
+    .request()
+    .input('user_id', sql.Int, userId)
+    .input('start_date', sql.Date, startDate)
+    .input('end_date', sql.Date, endDate)
+    .query(`
+      SELECT
+        id,
+        CAST(units AS FLOAT) AS units,
+        insulin_type,
+        CONCAT(
+          CONVERT(varchar(10), logged_date, 23),
+          'T',
+          CONVERT(varchar(8), logged_time, 108)
+        ) AS logged_at
+      FROM InsulinLogs
+      WHERE user_id = @user_id
+        AND logged_date >= @start_date
+        AND logged_date <= @end_date
+      ORDER BY logged_date ASC, logged_time ASC
+    `);
+
+  return result.recordset;
 }
 
 exports.createGlucose = async (req, res) => {
@@ -142,48 +202,34 @@ exports.getGlucoseAverages = async (req, res) => {
     const startDate = shiftLocalDate(today, -(days - 1));
     const startDateValue = formatLocalDate(startDate);
     const endDateValue = formatLocalDate(today);
+    const previousStartDateValue = formatLocalDate(shiftLocalDate(startDate, -days));
+    const previousEndDateValue = formatLocalDate(shiftLocalDate(startDate, -1));
 
-    const result = await pool
-      .request()
-      .input('user_id', sql.Int, req.user.id)
-      .input('start_date', sql.Date, startDateValue)
-      .input('end_date', sql.Date, endDateValue)
-      .query(`
-        SELECT
-          DATEPART(hour, logged_time) / 2 AS bucket_index,
-          AVG(CAST(glucose_level AS FLOAT)) AS average_glucose,
-          COUNT(*) AS reading_count
-        FROM GlucoseLogs
-        WHERE user_id = @user_id
-          AND logged_date >= @start_date
-          AND logged_date <= @end_date
-        GROUP BY DATEPART(hour, logged_time) / 2
-        ORDER BY bucket_index ASC
-      `);
+    const [settings, glucoseRows, previousGlucoseRows] = await Promise.all([
+      loadSettings(req.user.id),
+      loadGlucoseRange(req.user.id, startDateValue, endDateValue),
+      loadGlucoseRange(req.user.id, previousStartDateValue, previousEndDateValue),
+    ]);
 
-    const averagesByBucket = new Map(
-      result.recordset.map((row) => [Number(row.bucket_index), row])
-    );
+    if (!settings) {
+      return res.status(400).json({ error: 'Settings not found' });
+    }
 
-    const intervals = TWO_HOUR_INTERVALS.map((interval) => {
-      const row = averagesByBucket.get(interval.bucketIndex);
-      const averageGlucose = row ? Number(Number(row.average_glucose).toFixed(2)) : null;
-      const readingCount = row ? Number(row.reading_count) : 0;
-
-      return {
-        bucketIndex: interval.bucketIndex,
-        label: interval.label,
-        fullLabel: interval.fullLabel,
-        averageGlucose,
-        readingCount,
-      };
-    });
+    const intervals = calculateTimeOfDayAverages(glucoseRows, settings);
+    const metrics = calculateClinicalMetrics(glucoseRows, settings);
+    const previousMetrics = calculateClinicalMetrics(previousGlucoseRows, settings);
+    const trendComparison = compareMetrics(metrics, previousMetrics);
+    const dataQuality = assessDataQuality(glucoseRows, startDateValue, endDateValue);
 
     return res.json({
       days,
       startDate: startDateValue,
       endDate: endDateValue,
       intervals,
+      metrics,
+      previousMetrics,
+      trendComparison,
+      dataQuality,
     });
   } catch (err) {
     console.error('GET GLUCOSE AVERAGES ERROR:', err);
@@ -207,63 +253,11 @@ exports.getGlucoseInsights = async (req, res) => {
     const endDateValue = formatLocalDate(today);
     const insulinStartDateValue = formatLocalDate(shiftLocalDate(startDate, -1));
 
-    const [settingsResult, glucoseResult, insulinResult] = await Promise.all([
-      pool
-        .request()
-        .input('user_id', sql.Int, req.user.id)
-        .query(`
-          SELECT
-            correction_ratio,
-            target_min,
-            target_max
-          FROM UserSettings
-          WHERE user_id = @user_id
-        `),
-      pool
-        .request()
-        .input('user_id', sql.Int, req.user.id)
-        .input('start_date', sql.Date, startDateValue)
-        .input('end_date', sql.Date, endDateValue)
-        .query(`
-          SELECT
-            id,
-            glucose_level,
-            CONVERT(varchar(10), logged_date, 23) AS logged_date,
-            CONCAT(
-              CONVERT(varchar(10), logged_date, 23),
-              'T',
-              CONVERT(varchar(8), logged_time, 108)
-            ) AS logged_at
-          FROM GlucoseLogs
-          WHERE user_id = @user_id
-            AND logged_date >= @start_date
-            AND logged_date <= @end_date
-          ORDER BY logged_date ASC, logged_time ASC
-        `),
-      pool
-        .request()
-        .input('user_id', sql.Int, req.user.id)
-        .input('start_date', sql.Date, insulinStartDateValue)
-        .input('end_date', sql.Date, endDateValue)
-        .query(`
-          SELECT
-            id,
-            units,
-            insulin_type,
-            CONCAT(
-              CONVERT(varchar(10), logged_date, 23),
-              'T',
-              CONVERT(varchar(8), logged_time, 108)
-            ) AS logged_at
-          FROM InsulinLogs
-          WHERE user_id = @user_id
-            AND logged_date >= @start_date
-            AND logged_date <= @end_date
-          ORDER BY logged_date ASC, logged_time ASC
-        `),
+    const [settings, glucoseRows, insulinRows] = await Promise.all([
+      loadSettings(req.user.id),
+      loadGlucoseRange(req.user.id, startDateValue, endDateValue),
+      loadInsulinRange(req.user.id, insulinStartDateValue, endDateValue),
     ]);
-
-    const settings = settingsResult.recordset[0];
 
     if (!settings) {
       return res.status(400).json({ error: 'Settings not found' });
@@ -282,18 +276,27 @@ exports.getGlucoseInsights = async (req, res) => {
     }
 
     const insights = buildPatternInsights({
-      glucoseReadings: glucoseResult.recordset,
-      insulinLogs: insulinResult.recordset,
+      glucoseReadings: glucoseRows,
+      insulinLogs: insulinRows,
       settings,
       analysisDays: days,
       endDate: endDateValue,
     });
+    const prediction = buildGlucosePrediction({
+      glucoseReadings: glucoseRows,
+      insulinLogs: insulinRows,
+      settings,
+      atTime: new Date(),
+    });
+    const dataQuality = assessDataQuality(glucoseRows, startDateValue, endDateValue);
 
     return res.json({
       days,
       startDate: startDateValue,
       endDate: endDateValue,
       insights,
+      prediction,
+      dataQuality,
     });
   } catch (err) {
     console.error('GET GLUCOSE INSIGHTS ERROR:', err);

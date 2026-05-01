@@ -8,7 +8,7 @@ Write-Host " Starting GlucoBuddy Dev Stack "
 Write-Host "==============================="
 
 # --- Start Database ---
-Write-Host "`n[1/3] Starting SQL Server container..."
+Write-Host "`n[1/4] Starting SQL Server container..."
 
 $running = docker ps --filter "name=$containerName" --format "{{.Names}}"
 
@@ -24,7 +24,7 @@ Write-Host "Waiting for SQL Server to initialise..."
 Start-Sleep -Seconds 8
 
 # --- Start Backend ---
-Write-Host "`n[2/3] Starting backend server..."
+Write-Host "`n[2/4] Starting backend server..."
 
 Start-Process powershell -WindowStyle Minimized -ArgumentList @"
 cd glucobuddy-backend
@@ -37,7 +37,7 @@ Write-Host "Backend started"
 Start-Sleep -Seconds 1
 
 # --- Start Frontend ---
-Write-Host "`n[3/3] Starting frontend..."
+Write-Host "`n[3/4] Starting frontend..."
 
 Start-Process powershell -WindowStyle Minimized -ArgumentList @"
 cd glucobuddy-frontend
@@ -47,8 +47,14 @@ pause
 
 Write-Host "Frontend started"
 
+# --- Start ngrok route ---
+Write-Host "`n[4/4 Starting ngrok route...]"
+Start-Process powershell -WindowStyle Minimized -ArgumentList @"
+ngrok http 5173
+"@
+
 # --- Optional: open browser ---
 Start-Sleep -Seconds 2
-Start-Process "http://localhost:5173"
+Start-Process "https://shrimp-irate-crouton.ngrok-free.dev"
 
 Write-Host "`n All services started successfully!"

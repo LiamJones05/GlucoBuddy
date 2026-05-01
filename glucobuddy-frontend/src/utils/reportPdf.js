@@ -574,3 +574,4 @@ export async function downloadReportPdf(report, chartImageDataUrl) {
   URL.revokeObjectURL(url);
   return fileName;
 }
+

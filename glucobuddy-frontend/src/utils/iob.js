@@ -1,23 +1,22 @@
-export const INSULIN_ACTION_HOURS = 4;
+﻿export const INSULIN_ACTION_HOURS = 4.5;
+const PEAK_ACTIVITY_HOURS = 1.25;
 const IOB_INTERVAL_MINUTES = 15;
 const DAY_END_MINUTES = 1439;
 
-function insulinRemainingFraction(t, duration) {
-  if (t <= 0) return 1;
-  if (t >= duration) return 0;
-
-  const peak = duration * 0.25; // ~1 hour peak if duration = 4h
-
-  if (t <= peak) {
-    // slow initial drop
-    return 1 - 0.05 * (t / peak);
+function insulinRemainingFraction(elapsedHours, duration = INSULIN_ACTION_HOURS) {
+  if (!Number.isFinite(elapsedHours) || elapsedHours < 0 || elapsedHours >= duration) {
+    return 0;
   }
 
-  // decay phase
-  const x = (t - peak) / (duration - peak);
+  if (elapsedHours <= PEAK_ACTIVITY_HOURS) {
+    return Math.max(0, 1 - (0.08 * (elapsedHours / PEAK_ACTIVITY_HOURS)));
+  }
 
-  // exponential tail
-  return 0.95 * Math.exp(-2.5 * x);
+  const decayProgress = (elapsedHours - PEAK_ACTIVITY_HOURS) / (duration - PEAK_ACTIVITY_HOURS);
+  const tail = 0.92 * Math.exp(-3.2 * decayProgress);
+  const linearTaper = 1 - Math.pow(decayProgress, 1.7);
+
+  return Math.max(0, Math.min(1, tail * Math.max(0, linearTaper)));
 }
 
 function normaliseDateTime(dateTimeText) {
@@ -45,18 +44,8 @@ export function calculateInsulinOnBoard(insulinLogs, atTime) {
       return total;
     }
 
-    const elapsedHours = (atTime.getTime() - loggedAt.getTime()) / (1000 * 60 * 60);
-
-    if (elapsedHours < 0 || elapsedHours >= INSULIN_ACTION_HOURS) {
-      return total;
-    }
-
-    const remainingFraction = insulinRemainingFraction(
-  elapsedHours,
-  INSULIN_ACTION_HOURS
-);
-
-return total + (units * remainingFraction);
+    const elapsedHours = (atTime.getTime() - loggedAt.getTime()) / 3600000;
+    return total + (units * insulinRemainingFraction(elapsedHours));
   }, 0);
 }
 
@@ -80,7 +69,7 @@ export function buildIobSeries(insulinLogs, selectedDate) {
     );
     const windowEndMinutes = clampMinutes(
       Math.ceil(
-        ((loggedAt.getTime() + (INSULIN_ACTION_HOURS * 60 * 60 * 1000)) - dayStart.getTime()) / 60000
+        ((loggedAt.getTime() + (INSULIN_ACTION_HOURS * 3600000)) - dayStart.getTime()) / 60000
       )
     );
     const intervalStart = Math.max(

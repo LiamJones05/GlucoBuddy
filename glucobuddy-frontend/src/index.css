@@ -163,3 +163,80 @@ body {
 .auth-input:hover:not(:focus) {
   border-color: #a0aab4;
 }
+
+.navbar__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.navbar__logo {
+  width: 128px;
+  max-width: 42vw;
+  height: auto;
+  display: block;
+}
+
+.navbar__user {
+  color: #334155;
+  font-size: 0.95rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .navbar__brand {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .navbar__logo {
+    width: 118px;
+  }
+
+  .navbar__user {
+    max-width: 45vw;
+    text-align: right;
+  }
+}
+
+/* Header identity override */
+.navbar {
+  flex-wrap: wrap;
+}
+
+.navbar__brand {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+}
+
+.navbar__user {
+  max-width: 18rem;
+}
+
+@media (max-width: 640px) {
+  .navbar {
+    flex-direction: row;
+    align-items: center;
+    padding: 0.75rem 1rem;
+  }
+
+  .navbar__brand {
+    width: auto;
+    flex: 1 1 100%;
+    justify-content: flex-start;
+  }
+
+  .navbar__logo {
+    width: 112px;
+    max-width: 38vw;
+  }
+
+  .navbar__user {
+    max-width: calc(100vw - 170px);
+    text-align: left;
+  }
+}
