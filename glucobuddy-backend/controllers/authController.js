@@ -1,6 +1,6 @@
 ﻿const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { pool, poolConnect } = require('../db');
+const { pool, poolConnect, sql } = require('../db');
 
 // REGISTER
 exports.register = async (req, res) => {
@@ -181,65 +181,6 @@ exports.deleteAccount = async (req, res) => {
   }
 };
 
-exports.exportUserData = async (req, res) => {
-  try {
-    await poolConnect;
 
-    const userId = req.user.id;
 
-    const [
-      user,
-      settings,
-      glucose,
-      insulin,
-      meals,
-      doses,
-    ] = await Promise.all([
-      pool.request()
-        .input('user_id', userId)
-        .query(`SELECT id, email, first_name, last_name, created_at FROM Users WHERE id = @user_id`),
 
-      pool.request()
-        .input('user_id', userId)
-        .query(`SELECT * FROM UserSettings WHERE user_id = @user_id`),
-
-      pool.request()
-        .input('user_id', userId)
-        .query(`SELECT * FROM GlucoseLogs WHERE user_id = @user_id ORDER BY logged_date, logged_time`),
-
-      pool.request()
-        .input('user_id', userId)
-        .query(`SELECT * FROM InsulinLogs WHERE user_id = @user_id ORDER BY logged_date, logged_time`),
-
-      pool.request()
-        .input('user_id', userId)
-        .query(`SELECT * FROM MealLogs WHERE user_id = @user_id ORDER BY logged_at`),
-
-      pool.request()
-        .input('user_id', userId)
-        .query(`SELECT * FROM DoseCalculations WHERE user_id = @user_id ORDER BY created_at`)
-    ]);
-
-    const exportData = {
-      user: user.recordset[0],
-      settings: settings.recordset[0],
-      glucoseLogs: glucose.recordset,
-      insulinLogs: insulin.recordset,
-      mealLogs: meals.recordset,
-      doseCalculations: doses.recordset,
-      exportedAt: new Date().toISOString()
-    };
-
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename=glucobuddy-data-${userId}.json`
-    );
-
-    return res.send(JSON.stringify(exportData, null, 2));
-
-  } catch (err) {
-    console.error('EXPORT ERROR:', err);
-    return res.status(500).json({ error: err.message });
-  }
-};

@@ -5,6 +5,11 @@ import '../styles/settings.css';
 
 export default function Settings() {
   const [settings, setSettings] = useState({});
+  const [dragActive, setDragActive] = useState(false);
+  const [fileName, setFileName] = useState('');
+  const [importPreview, setImportPreview] = useState(null);
+  const [pendingImportData, setPendingImportData] = useState(null);
+  
 
   // Delete account state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -23,6 +28,7 @@ export default function Settings() {
     alert('Updated');
   };
 
+  // ---------------- DELETE ----------------
   const handleDeleteAccount = async () => {
     setDeleting(true);
     setDeleteError('');
@@ -37,10 +43,7 @@ export default function Settings() {
         },
       });
 
-      // Clear session
       localStorage.removeItem('token');
-
-      // Redirect to login
       navigate('/login');
 
     } catch (err) {
@@ -50,115 +53,131 @@ export default function Settings() {
     }
   };
 
+  // ---------------- DOWNLOAD ----------------
   const handleDownload = async () => {
-      try {
-        const response = await API.get('/auth/export', {
-          responseType: 'blob',
-        });
+    try {
+      const response = await API.get('/data/export', {
+        responseType: 'blob',
+      });
 
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement('a');
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
 
-        link.href = url;
-        link.setAttribute('download', 'glucobuddy-data.json');
+      link.href = url;
+      link.setAttribute('download', `glucobuddy-data-${new Date().toISOString().slice(0,10)}.json`);
 
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
 
-      } catch (err) {
-        alert('Failed to download data');
-      }
-    };
+    } catch (err) {
+      alert('Failed to download data');
+    }
+  };
+
+  // ---------------- UPLOAD ----------------
+  const handleUpload = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  setFileName(file.name);
+
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+
+    // Call preview endpoint
+    const res = await API.post('/data/preview', data);
+
+    setImportPreview(res.data);
+    setPendingImportData(data);
+
+  } catch (err) {
+    console.error(err);
+    alert('Invalid file or preview failed');
+  }
+};
+
+const confirmImport = async () => {
+  try {
+    await API.post('/data/import', pendingImportData);
+
+    alert('Data restored successfully');
+    window.location.reload();
+
+  } catch (err) {
+    alert('Import failed');
+  }
+};
+
+ 
 
   return (
     <>
       <div className="settings">
         <h2 className="settings-title">Settings</h2>
 
-        {/* Correction & Targets */}
+        {/* ---------------- SETTINGS ---------------- */}
         <div className="settings-card">
           <h3>Correction & Targets</h3>
 
-          <label htmlFor="correction_ratio">Correction Ratio</label>
+          <label>Correction Ratio</label>
           <input
-            id="correction_ratio"
-            placeholder="e.g. 2"
             value={settings.correction_ratio || ''}
             onChange={e =>
-              setSettings({
-                ...settings,
-                correction_ratio: e.target.value
-              })
+              setSettings({ ...settings, correction_ratio: e.target.value })
             }
           />
 
-          <label htmlFor="target_min">Target Min</label>
+          <label>Target Min</label>
           <input
-            id="target_min"
-            placeholder="e.g. 4.0"
             value={settings.target_min || ''}
             onChange={e =>
-              setSettings({
-                ...settings,
-                target_min: e.target.value
-              })
+              setSettings({ ...settings, target_min: e.target.value })
             }
           />
 
-          <label htmlFor="target_max">Target Max</label>
+          <label>Target Max</label>
           <input
-            id="target_max"
-            placeholder="e.g. 8.0"
             value={settings.target_max || ''}
             onChange={e =>
-              setSettings({
-                ...settings,
-                target_max: e.target.value
-              })
+              setSettings({ ...settings, target_max: e.target.value })
             }
           />
         </div>
 
-        {/* Carb Ratios */}
         <div className="settings-card">
           <h3>Time-based Carb Ratios</h3>
 
-          <label htmlFor="carb_ratio_morning">Morning Carb Ratio</label>
+          <label>Morning</label>
           <input
-            id="carb_ratio_morning"
-            placeholder="e.g. 10"
             value={settings.carb_ratio_morning || ''}
             onChange={e =>
               setSettings({
                 ...settings,
-                carb_ratio_morning: Number(e.target.value)
+                carb_ratio_morning: Number(e.target.value),
               })
             }
           />
 
-          <label htmlFor="carb_ratio_afternoon">Afternoon Carb Ratio</label>
+          <label>Afternoon</label>
           <input
-            id="carb_ratio_afternoon"
-            placeholder="e.g. 12"
             value={settings.carb_ratio_afternoon || ''}
             onChange={e =>
               setSettings({
                 ...settings,
-                carb_ratio_afternoon: Number(e.target.value)
+                carb_ratio_afternoon: Number(e.target.value),
               })
             }
           />
 
-          <label htmlFor="carb_ratio_evening">Evening Carb Ratio</label>
+          <label>Evening</label>
           <input
-            id="carb_ratio_evening"
-            placeholder="e.g. 14"
             value={settings.carb_ratio_evening || ''}
             onChange={e =>
               setSettings({
                 ...settings,
-                carb_ratio_evening: Number(e.target.value)
+                carb_ratio_evening: Number(e.target.value),
               })
             }
           />
@@ -166,7 +185,77 @@ export default function Settings() {
 
         <button onClick={update}>Save</button>
 
-        {/* Danger Zone */}
+        {/* ---------------- BACKUP & RESTORE ---------------- */}
+        <div className="export-card">
+          <h3>Backup & Restore</h3>
+          <p>Download or restore your full data history.</p>
+
+          <button onClick={handleDownload} className="download-btn">
+            Download my data
+          </button>
+            
+          <div
+            className={`upload-zone ${dragActive ? 'drag-active' : ''}`}
+            onClick={() => document.getElementById('fileUpload').click()}
+
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragActive(true); 
+            }}
+
+            onDragLeave={() => setDragActive(false)} 
+
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragActive(false); 
+
+              const file = e.dataTransfer.files[0];
+              if (file) {
+                setFileName(file.name); 
+                handleUpload({ target: { files: [file] } });
+              }
+            }}
+          >
+            <p className="upload-title">Upload backup file</p>
+            <p className="upload-subtext">Drag & drop your JSON file here or click to browse</p>
+            {fileName && (
+              <p className="upload-file">
+                Uploaded: {fileName}
+              </p>
+            )}
+          </div>
+
+          <input
+            id="fileUpload"
+            type="file"
+            accept="application/json"
+            onChange={handleUpload}
+            style={{ display: 'none' }}
+          />
+
+            {importPreview && (
+              <div className="import-preview">
+                <h4>Import Preview</h4>
+
+                <p><strong>Glucose logs:</strong> {importPreview.counts.glucose}</p>
+                <p><strong>Insulin logs:</strong> {importPreview.counts.insulin}</p>
+                <p><strong>Meals:</strong> {importPreview.counts.meals}</p>
+                <p><strong>Dose calculations:</strong> {importPreview.counts.doses}</p>
+
+                <p>
+                  <strong>Date range:</strong><br />
+                  {importPreview.dateRange.start} → {importPreview.dateRange.end}
+                </p>
+
+                <button onClick={confirmImport} className="delete-btn">
+                  Confirm Import
+                </button>
+              </div>
+            )}
+
+        </div>
+
+        {/* ---------------- DANGER ZONE ---------------- */}
         <div className="settings-card danger-zone">
           <h3>Danger Zone</h3>
           <p className="danger-text">
@@ -186,16 +275,13 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* Delete Modal */}
+      {/* ---------------- MODAL ---------------- */}
       {showDeleteModal && (
         <div className="modal-overlay">
           <div className="modal">
             <h2>Delete Account</h2>
 
-            <p>
-              This action cannot be undone. All your glucose, insulin,
-              and report data will be permanently deleted.
-            </p>
+            <p>This action cannot be undone.</p>
 
             <input
               type="password"
@@ -217,13 +303,6 @@ export default function Settings() {
                 disabled={!password || deleting}
               >
                 {deleting ? 'Deleting...' : 'Delete Account'}
-              </button>
-              <button
-                type="button"
-                onClick={handleDownload}
-                className="download-btn"
-              >
-                Download my data
               </button>
             </div>
           </div>

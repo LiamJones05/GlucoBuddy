@@ -1,0 +1,533 @@
+const { pool, poolConnect, sql } = require('../db');
+
+// ---------------- HELPERS ----------------
+const splitDateTime = (isoString) => {
+  if (!isoString || typeof isoString !== 'string') {
+    return { date: null, time: null };
+  }
+
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) {
+    return { date: null, time: null };
+  }
+
+  const iso = d.toISOString();
+
+  return {
+    date: iso.slice(0, 10),
+    time: iso.slice(11, 19)
+  };
+};
+
+// ------------- EXPORTS ------------------
+exports.exportUserData = async (req, res) => {
+  try {
+    await poolConnect;
+
+    const userId = req.user.id;
+
+    const [
+      user,
+      settings,
+      glucose,
+      insulin,
+      meals,
+      doses,
+    ] = await Promise.all([
+      pool.request()
+        .input('user_id', userId)
+        .query(`
+          SELECT id, email, first_name, last_name, created_at
+          FROM Users
+          WHERE id = @user_id
+        `),
+
+      pool.request()
+        .input('user_id', userId)
+        .query(`
+          SELECT * FROM UserSettings
+          WHERE user_id = @user_id
+        `),
+
+      pool.request()
+        .input('user_id', userId)
+        .query(`
+          SELECT * FROM GlucoseLogs
+          WHERE user_id = @user_id
+          ORDER BY logged_date, logged_time
+        `),
+
+      pool.request()
+        .input('user_id', userId)
+        .query(`
+          SELECT * FROM InsulinLogs
+          WHERE user_id = @user_id
+          ORDER BY logged_date, logged_time
+        `),
+
+      pool.request()
+        .input('user_id', userId)
+        .query(`
+          SELECT * FROM MealLogs
+          WHERE user_id = @user_id
+          ORDER BY logged_at
+        `),
+
+      pool.request()
+        .input('user_id', userId)
+        .query(`
+          SELECT * FROM DoseCalculations
+          WHERE user_id = @user_id
+          ORDER BY created_at
+        `)
+    ]);
+
+    // ---------------- FORMAT HELPERS ----------------
+
+    const formatDate = (sqlDate) => {
+      if (!sqlDate) return null;
+
+      const d = new Date(sqlDate);
+      if (isNaN(d.getTime())) return null;
+
+      return d.toISOString().slice(0, 10); // YYYY-MM-DD
+    };
+
+    const formatTime = (sqlTime) => {
+      if (!sqlTime) return null;
+
+      if (typeof sqlTime === 'string') {
+        return sqlTime.slice(0, 8); // HH:mm:ss
+      }
+
+      if (sqlTime instanceof Date) {
+        return [
+          sqlTime.getHours().toString().padStart(2, '0'),
+          sqlTime.getMinutes().toString().padStart(2, '0'),
+          sqlTime.getSeconds().toString().padStart(2, '0')
+        ].join(':');
+      }
+
+      return null;
+    };
+
+    // ---------------- NORMALISE DATA ----------------
+
+    const glucoseLogs = glucose.recordset
+      .map(g => {
+        const date = formatDate(g.logged_date);
+        const time = formatTime(g.logged_time);
+
+        if (!date || !time) {
+          console.warn('Skipping invalid glucose export row:', g);
+          return null;
+        }
+
+        return {
+          glucose_level: g.glucose_level,
+          logged_at: `${date}T${time}`
+        };
+      })
+      .filter(Boolean);
+
+    const insulinLogs = insulin.recordset
+      .map(i => {
+        const date = formatDate(i.logged_date);
+        const time = formatTime(i.logged_time);
+
+        if (!date || !time) {
+          console.warn('Skipping invalid insulin export row:', i);
+          return null;
+        }
+
+        return {
+          units: i.units,
+          insulin_type: i.insulin_type,
+          logged_at: `${date}T${time}`
+        };
+      })
+      .filter(Boolean);
+
+    const mealLogs = meals.recordset
+      .map(m => {
+        if (!m.logged_at) return null;
+
+        const d = new Date(m.logged_at);
+        if (isNaN(d.getTime())) return null;
+
+        return {
+          carbs: m.carbs,
+          protein: m.protein,
+          logged_at: d.toISOString()
+        };
+      })
+      .filter(Boolean);
+
+    const doseCalculations = doses.recordset
+      .map(d => {
+        const created = new Date(d.created_at);
+
+        if (isNaN(created.getTime())) return null;
+
+        return {
+          glucose_input: d.glucose_input,
+          carbs_input: d.carbs_input,
+          recommended_dose: d.recommended_dose,
+          created_at: created.toISOString()
+        };
+      })
+      .filter(Boolean);
+
+    // ---------------- EXPORT OBJECT ----------------
+
+    const exportData = {
+      version: "1.1",
+      exportedAt: new Date().toISOString(),
+
+      user: {
+        id: user.recordset[0].id,
+        email: user.recordset[0].email,
+        first_name: user.recordset[0].first_name,
+        last_name: user.recordset[0].last_name,
+      },
+
+      settings: settings.recordset[0],
+
+      meta: {
+        counts: {
+          glucose: glucoseLogs.length,
+          insulin: insulinLogs.length,
+          meals: mealLogs.length,
+          doses: doseCalculations.length
+        }
+      },
+
+      data: {
+        glucoseLogs,
+        insulinLogs,
+        mealLogs,
+        doseCalculations,
+      }
+    };
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=glucobuddy-data-${userId}.json`
+    );
+
+    return res.send(JSON.stringify(exportData, null, 2));
+
+  } catch (err) {
+    console.error('EXPORT ERROR:', err);
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+//--------------------- IMPORT ------------------------
+exports.importUserData = async (req, res) => {
+  const payload = req.body;
+
+  if (!payload || !payload.data) {
+    return res.status(400).json({ error: 'Invalid file structure' });
+  }
+
+  // Support both versions (so you don’t break older exports)
+  if (!['1.0', '1.1'].includes(payload.version)) {
+    return res.status(400).json({ error: 'Unsupported file version' });
+  }
+
+  const userId = req.user.id;
+
+  const settings = payload.settings;
+
+  const {
+    glucoseLogs = [],
+    insulinLogs = [],
+    mealLogs = [],
+    doseCalculations = []
+  } = payload.data;
+
+  
+  // Helper: split ISO datetime safely
+const splitDateTime = (isoString) => {
+  if (!isoString || typeof isoString !== 'string') {
+    return { date: null, time: null };
+  }
+
+  const d = new Date(isoString);
+
+  if (isNaN(d.getTime())) {
+    return { date: null, time: null };
+  }
+
+  const iso = d.toISOString();
+
+  return {
+    date: iso.slice(0, 10),     // YYYY-MM-DD
+    time: iso.slice(11, 19)     // HH:mm:ss
+  };
+};
+
+  try {
+    await poolConnect;
+
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      // ---------------- CLEAR EXISTING ----------------
+      await new sql.Request(transaction)
+        .input('user_id', sql.Int, userId)
+        .query(`
+          DELETE FROM GlucoseLogs WHERE user_id = @user_id;
+          DELETE FROM InsulinLogs WHERE user_id = @user_id;
+          DELETE FROM MealLogs WHERE user_id = @user_id;
+          DELETE FROM DoseCalculations WHERE user_id = @user_id;
+        `);
+
+      // ---------------- SETTINGS ----------------
+      if (settings) {
+        await new sql.Request(transaction)
+          .input('user_id', sql.Int, userId)
+          .input('correction_ratio', sql.Decimal(6,2), settings.correction_ratio)
+          .input('target_min', sql.Decimal(5,2), settings.target_min)
+          .input('target_max', sql.Decimal(5,2), settings.target_max)
+          .input('morning', sql.Decimal(6,2), settings.carb_ratio_morning)
+          .input('afternoon', sql.Decimal(6,2), settings.carb_ratio_afternoon)
+          .input('evening', sql.Decimal(6,2), settings.carb_ratio_evening)
+          .query(`
+            UPDATE UserSettings
+            SET
+              correction_ratio = @correction_ratio,
+              target_min = @target_min,
+              target_max = @target_max,
+              carb_ratio_morning = @morning,
+              carb_ratio_afternoon = @afternoon,
+              carb_ratio_evening = @evening
+            WHERE user_id = @user_id
+          `);
+      }
+
+      // ---------------- GLUCOSE ----------------
+      for (const g of glucoseLogs) {
+        let date = null;
+        let time = null;
+
+        if (g.logged_at && typeof g.logged_at === 'string') {
+          const d = new Date(g.logged_at);
+
+          if (!isNaN(d.getTime())) {
+            date = d.toISOString().slice(0, 10);
+            time = d.toISOString().slice(11, 19);
+          }
+        } else if (g.logged_date && g.logged_time) {
+          const combined = new Date(`${g.logged_date}T${g.logged_time}`);
+
+          if (!isNaN(combined.getTime())) {
+            date = combined.toISOString().slice(0, 10);
+            time = combined.toISOString().slice(11, 19);
+          }
+        }
+
+        if (
+          !date ||
+          !time ||
+          !/^\d{2}:\d{2}:\d{2}$/.test(time)
+        ) {
+          console.warn('❌ Skipping invalid glucose row:', { date, time, original: g });
+          continue;
+        }
+
+        await new sql.Request(transaction)
+          .input('user_id', sql.Int, userId)
+          .input('glucose_level', sql.Float, g.glucose_level)
+          .input('logged_date', sql.Date, date)
+          .input('logged_time', sql.Time, new Date(`1970-01-01T${time}Z`))
+          .query(`
+            INSERT INTO GlucoseLogs (user_id, glucose_level, logged_date, logged_time)
+            VALUES (@user_id, @glucose_level, @logged_date, @logged_time)
+          `);
+      }
+
+      // ---------------- INSULIN ----------------
+      for (const i of insulinLogs) {
+        let date = null;
+        let time = null;
+
+        if (i.logged_at) {
+          ({ date, time } = splitDateTime(i.logged_at));
+        } else if (i.logged_date && i.logged_time) {
+          const combined = new Date(`${i.logged_date}T${i.logged_time}`);
+
+          if (!isNaN(combined.getTime())) {
+            date = combined.toISOString().slice(0, 10);
+            time = combined.toISOString().slice(11, 19);
+          }
+        }
+
+        if (!date || !time || !/^\d{2}:\d{2}:\d{2}$/.test(time)) {
+          console.warn('Skipping invalid insulin row:', i);
+          continue;
+        }
+
+        await new sql.Request(transaction)
+          .input('user_id', sql.Int, userId)
+          .input('units', sql.Decimal(6,2), i.units)
+          .input('type', sql.NVarChar(50), i.insulin_type)
+          .input('logged_date', sql.Date, date)
+          .input('logged_time', sql.Time, new Date(`1970-01-01T${time}Z`))
+          .query(`
+            INSERT INTO InsulinLogs (user_id, units, insulin_type, logged_date, logged_time)
+            VALUES (@user_id, @units, @type, @logged_date, @logged_time)
+          `);
+      }
+
+      // ---------------- MEALS ----------------
+      for (const m of mealLogs) {
+        if (!m.logged_at) continue;
+
+        const d = new Date(m.logged_at);
+        if (isNaN(d.getTime())) {
+          console.warn('❌ Skipping invalid meal row:', m);
+          continue;
+        }
+
+        await new sql.Request(transaction)
+          .input('user_id', sql.Int, userId)
+          .input('carbs', sql.Decimal(6,2), m.carbs)
+          .input('protein', sql.Decimal(6,2), m.protein)
+          .input('logged_at', sql.DateTime2, d)
+          .query(`
+            INSERT INTO MealLogs (user_id, carbs, protein, logged_at)
+            VALUES (@user_id, @carbs, @protein, @logged_at)
+          `);
+      }
+
+      // ---------------- DOSE CALCULATIONS ----------------
+      for (const d of doseCalculations) {
+        if (
+          d.glucose_input == null ||
+          d.carbs_input == null ||
+          d.recommended_dose == null
+        ) {
+          console.warn('❌ Skipping invalid dose row:', d);
+          continue;
+        }
+
+        await new sql.Request(transaction)
+          .input('user_id', sql.Int, userId)
+          .input('glucose', sql.Decimal(6,2), d.glucose_input)
+          .input('carbs', sql.Decimal(6,2), d.carbs_input)
+          .input('dose', sql.Decimal(6,2), d.recommended_dose)
+          .query(`
+            INSERT INTO DoseCalculations (user_id, glucose_input, carbs_input, recommended_dose)
+            VALUES (@user_id, @glucose, @carbs, @dose)
+          `);
+      }
+
+      await transaction.commit();
+
+      return res.json({ message: 'Data imported successfully' });
+
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
+
+  } catch (err) {
+    console.error('IMPORT ERROR :', err);
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+//---------------------- PREVIEW -----------------
+exports.previewImport = async (req, res) => {
+  const payload = req.body;
+
+  if (!payload || !payload.data) {
+    return res.status(400).json({ error: 'Invalid file structure' });
+  }
+
+  if (!['1.0', '1.1'].includes(payload.version)) {
+    return res.status(400).json({ error: 'Unsupported file version' });
+  }
+
+  const {
+    glucoseLogs = [],
+    insulinLogs = [],
+    mealLogs = [],
+    doseCalculations = []
+  } = payload.data;
+
+  // ---------- helper: normalize to Date ----------
+  const extractDateTime = (entry) => {
+    // ✅ New format (v1.1)
+    if (entry.logged_at && typeof entry.logged_at === 'string') {
+      const d = new Date(entry.logged_at);
+      return isNaN(d.getTime()) ? null : d;
+    }
+
+    // ⚠️ Old format fallback (v1.0)
+    if (entry.logged_date && entry.logged_time) {
+      let time;
+
+      if (typeof entry.logged_time === 'string') {
+        time = entry.logged_time.slice(0, 8);
+      } else {
+        const t = new Date(entry.logged_time);
+        if (isNaN(t.getTime())) return null;
+        time = t.toISOString().slice(11, 19);
+      }
+
+      const combined = new Date(`${entry.logged_date}T${time}`);
+      return isNaN(combined.getTime()) ? null : combined;
+    }
+
+    return null;
+  };
+
+  // ---------- collect + validate ----------
+  const validDates = [
+    ...glucoseLogs.map(extractDateTime),
+    ...insulinLogs.map(extractDateTime)
+  ]
+    .filter(d => d instanceof Date && !isNaN(d.getTime()))
+    .sort((a, b) => a - b);
+
+  // ---------- density metric ----------
+  let glucosePerDay = 0;
+
+  if (validDates.length > 1) {
+    const days =
+      (validDates[validDates.length - 1] - validDates[0]) /
+      (1000 * 60 * 60 * 24);
+
+    glucosePerDay = days > 0
+      ? (glucoseLogs.length / days).toFixed(1)
+      : glucoseLogs.length;
+  }
+
+  // ---------- response ----------
+  const preview = {
+    counts: {
+      glucose: glucoseLogs.length,
+      insulin: insulinLogs.length,
+      meals: mealLogs.length,
+      doses: doseCalculations.length
+    },
+    dateRange: {
+      start: validDates.length
+        ? validDates[0].toISOString()
+        : null,
+      end: validDates.length
+        ? validDates[validDates.length - 1].toISOString()
+        : null
+    },
+    density: {
+      glucosePerDay
+    }
+  };
+
+  return res.json(preview);
+};

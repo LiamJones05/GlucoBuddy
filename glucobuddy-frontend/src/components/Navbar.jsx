@@ -52,9 +52,7 @@ export default function Navbar() {
       </div>
 
       <nav className="navbar__links" aria-label="Primary">
-        <NavLink to="/analytics" className={getLinkClass}>
-          Analytics
-        </NavLink>
+        
 
         <NavLink to="/log-glucose" className={getLinkClass}>
           Log
@@ -62,6 +60,10 @@ export default function Navbar() {
 
         <NavLink to="/calculator" className={getLinkClass}>
           Calculator
+        </NavLink>
+        
+        <NavLink to="/analytics" className={getLinkClass}>
+          Analytics
         </NavLink>
 
         <NavLink to="/settings" className={getLinkClass}>

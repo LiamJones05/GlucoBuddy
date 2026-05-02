@@ -26,3 +26,4 @@ app.use('/api/insulin', require('./routes/insulin'));
 app.use('/api/meals', require('./routes/meals'));
 app.use('/api/dose', require('./routes/dose'));
 app.use('/api/reports', require('./routes/reports'));
+app.use('/api/data', require('./routes/data'));
