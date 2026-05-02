@@ -22,3 +22,6 @@ Thumbs.db
 # Editor files
 .vscode/
 .idea/
+
+start_dev.bat
+start_dev.ps1
