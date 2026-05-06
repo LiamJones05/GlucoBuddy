@@ -50,14 +50,25 @@ body {
 html {
   color-scheme: light dark;
 }
-html, body {
+
+html,
+body {
   height: 100%;
-  overflow-x: hidden;
-   -webkit-overflow-scrolling: touch;
 }
 
-html, body, #root {
-  overflow-y: clip;
+#root {
+  min-height: 100dvh;
+}
+@media (max-width: 767px) {
+  html,
+  body {
+    overflow: hidden;
+  }
+
+  #root {
+    height: 100dvh;
+    overflow: hidden;
+  }
 }
 
 .card,
@@ -69,9 +80,6 @@ html, body, #root {
     border-color 0.25s var(--ease-ios);
 }
 
-#root {
-  min-height: 100dvh;
-}
 
 .navbar {
   display: flex;
@@ -124,15 +132,26 @@ html, body, #root {
 }
 
 .page-content {
-  min-height: 100dvh;
-  overscroll-behavior-y: contain;
-  max-width: 960px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 1.5rem;
-  padding-bottom: calc(90px + env(safe-area-inset-bottom));
 
-  position: relative;
-  overflow: hidden;
+  padding: 1.5rem;
+}
+
+/* ===== MOBILE APP SCROLLING ===== */
+@media (max-width: 767px) {
+  .page-content {
+    height: calc(100dvh - 72px - 88px);
+
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    -webkit-overflow-scrolling: touch;
+
+    overscroll-behavior-y: contain;
+
+    padding-bottom: 2rem;
+  }
 }
 
 @media (max-width: 640px) {
@@ -503,49 +522,64 @@ html, body, #root {
   left: 0;
   right: 0;
 
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  height: 88px;
+  padding-bottom: env(safe-area-inset-bottom);
 
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
 
-  background: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.98);
+
   border-top: 1px solid var(--border);
 
-  padding: 0.4rem 0 calc(0.6rem + env(safe-area-inset-bottom));
-  pointer-events: auto;
-  z-index: 9999;
+  z-index: 999999999;
+
   isolation: isolate;
+
+  pointer-events: auto;
+
   touch-action: manipulation;
+
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+
+  will-change: transform;
+
+  overflow: hidden;
 }
+
+
 
 [data-theme="dark"] .mobile-nav {
   background: rgba(17, 24, 39, 0.9);
 }
 
-.mobile-nav * {
-  pointer-events: auto;
-}
-
-
 
 
 .mobile-nav__link {
+  flex: 1;
+
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
 
-  min-height: 64px;
-  padding: 0.4rem 0;
-
-  font-size: 0.8rem;
-  font-weight: 500;
+  height: 100%;
 
   color: var(--text-secondary);
   text-decoration: none;
 
-  transition: all 0.2s ease;
+  font-size: 0.8rem;
+  font-weight: 500;
+
+  position: relative;
+
+  z-index: 2;
+
+  pointer-events: auto;
+
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* active state */
@@ -632,15 +666,6 @@ h1, h2, h3 {
   transition: transform 0.2s var(--ease-ios);
 }
 
-canvas {
-  pointer-events: auto;
-}
-.chart-container canvas {
-  z-index: 1;
-  position: relative;
-  max-width: 100% !important;
-  width: 100% !important;
-}
 
 input,
 textarea,
@@ -662,4 +687,35 @@ select {
 
 .glucose-controls input {
   width: 100%;
+}
+
+.chart-container {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+
+  overflow: hidden;
+}
+
+.recharts-responsive-container {
+  min-width: 0;
+  touch-action: pan-y;
+}
+
+
+.card--wide {
+  padding-bottom: 48px;
+}
+.chart-container {
+  padding-bottom: 32px;
+}
+.mobile-nav::before {
+  content: '';
+
+  position: absolute;
+  inset: 0;
+
+  z-index: 1;
+
+  background: transparent;
 }

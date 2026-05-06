@@ -2,6 +2,9 @@ import axios from 'axios';
 
 const API = axios.create({
   baseURL: '/api',
+  headers: {
+    'ngrok-skip-browser-warning': 'true',
+  },
 });
 
 // Attach token automatically

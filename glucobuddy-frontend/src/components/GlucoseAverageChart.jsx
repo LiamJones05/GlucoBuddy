@@ -10,6 +10,8 @@
   YAxis,
 } from 'recharts';
 
+const isMobile = window.innerWidth < 768;
+
 function getYDomain(data, targetMin, targetMax) {
   const values = data
     .map((entry) => entry.averageGlucose)
@@ -69,8 +71,18 @@ export default function GlucoseAverageChart({ data, days, targetMin, targetMax }
     <div className="chart-container chart-container--averages">
       <p className="chart-subtitle">Average glucose for each 2-hour interval across the last {days} days</p>
 
-      <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={data} margin={{ top: 16, right: 16, bottom: 8, left: 0 }}>
+      <ResponsiveContainer 
+      width="100%" 
+      height={isMobile ? 320 : 400}>
+        <BarChart
+          data={data}
+          margin={{
+            top: 16,
+            right: isMobile ? 4 : 16,
+            bottom: isMobile ? 40 : 8,
+            left: isMobile ? -12 : 0,
+          }}
+        >
           <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
 
           {hasTargetRange ? (
@@ -83,8 +95,18 @@ export default function GlucoseAverageChart({ data, days, targetMin, targetMax }
             />
           ) : null}
 
-          <XAxis dataKey="label" tick={{ fontSize: 12 }} tickMargin={8} interval={0} />
-          <YAxis domain={yDomain} tickCount={6} width={56} />
+          <XAxis
+            dataKey="label"
+            tick={{ fontSize: isMobile ? 9 : 12 }}
+            tickMargin={isMobile ? 12 : 8}
+            interval={isMobile? 1: 0 }
+          />
+          <YAxis
+            domain={yDomain}
+            tickCount={isMobile ? 4 : 6}
+            width={isMobile ? 36 : 56}
+            tick={{ fontSize: isMobile ? 10 : 12 }}
+          />
 
           <Tooltip
             labelFormatter={(_, payload) => payload?.[0]?.payload?.fullLabel || ''}

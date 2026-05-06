@@ -96,7 +96,10 @@ export default function GlucoseChart({ data, selectedDate, targetMin, targetMax 
       <h3>Glucose Levels</h3>
       <p className="chart-subtitle">Showing readings for {selectedDate}</p>
 
-      <ResponsiveContainer width="100%" aspect={isMobile ? 1.2 : 1.8}>
+      <ResponsiveContainer
+        width="100%"
+        height={isMobile ? 260 : 420}
+      >
         <LineChart data={data} margin={{
           top: isMobile ? 8 : 16,
           right: isMobile ? 8 : 16,
@@ -144,7 +147,26 @@ export default function GlucoseChart({ data, selectedDate, targetMin, targetMax 
           ) : null}
 
           <Tooltip
+            wrapperStyle={{ pointerEvents: 'none' }}
+
+            contentStyle={{
+              backgroundColor: 'var(--card)',
+              border: '1px solid var(--border)',
+              borderRadius: '12px',
+              color: 'var(--text)',
+            }}
+
+            labelStyle={{
+              color: 'var(--text)',
+              fontWeight: 600,
+            }}
+
+            itemStyle={{
+              color: 'var(--text)',
+            }}
+
             labelFormatter={(value) => `Time: ${formatMinutes(value)}`}
+
             formatter={(value, name) => {
               if (name === 'IOB') {
                 return [`${value} units`, 'IOB'];
@@ -154,6 +176,7 @@ export default function GlucoseChart({ data, selectedDate, targetMin, targetMax 
             }}
           />
           {!isMobile && <Legend />}
+          
 
           <ReferenceLine
             yAxisId="glucose"
@@ -177,7 +200,7 @@ export default function GlucoseChart({ data, selectedDate, targetMin, targetMax 
             stroke="#3b82f6"
             strokeWidth={2}
             dot={{ r: isMobile ? 2 : 4 }}
-            activeDot={{ r: isMobile ? 4 : 6 }}
+            activeDot={false}
             connectNulls
           />
 

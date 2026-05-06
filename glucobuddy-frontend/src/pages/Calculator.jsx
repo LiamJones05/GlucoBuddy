@@ -132,17 +132,21 @@ export default function Calculator() {
         glucose_level: Number(calculatorGlucose),
       });
 
-      setCalculatorError(
-        err.response?.data?.error ||
-        err.response?.data?.message ||
-        'Unable to calculate dose.'
+      setCalculatorSuccess(
+        `Logged ${numericFinalDose} units for ${calculatorDate} at ${calculatorTime}.`
       );
+
       setDoseResult(null);
       setFinalDose('');
       setCalculatorCarbs('');
     } catch (err) {
       console.error('Error confirming insulin dose:', err);
-      setCalculatorError(err.response?.data?.error || 'Unable to log insulin dose.');
+
+      setCalculatorError(
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        'Unable to log insulin dose.'
+      );
     } finally {
       setIsConfirmingDose(false);
     }

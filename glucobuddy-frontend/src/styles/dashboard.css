@@ -146,8 +146,10 @@
 }
 
 .button-secondary {
-  background: var(--secondary);
-  color: #0f172a;
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--accent);
+
+  border: 1px solid rgba(59, 130, 246, 0.25);
 }
 
 .button-tertiary {
@@ -271,6 +273,14 @@
 
 .chart-container--averages {
   margin-top: 0.75rem;
+
+  overflow: visible;
+}
+
+@media (max-width: 767px) {
+  .chart-container--averages {
+    padding-bottom: 24px;
+  }
 }
 
 .chart-empty {
@@ -349,10 +359,39 @@
 }
 
 .report-controls input {
-  min-width: 180px;
+  width: 100%;
+  min-width: 0;
+
+  box-sizing: border-box;
+
   padding: 0.5rem 0.6rem;
+
   border: 1px solid var(--border);
   border-radius: 6px;
+
+  background: var(--card);
+  color: var(--text);
+}
+.report-controls,
+.report-controls label { 
+  min-width: 0;
+}
+
+.report-controls input[type="date"]{
+  width: 100%;
+  min-width:0;
+
+  max-width: 100%;
+  box-sizing: border-box;
+
+  appearance: none;
+  -webkit-appearance: none;
+}
+@media (max-width: 767px) {
+  .report-controls--stacked {
+    width: 100%;
+    overflow: hidden;
+  }
 }
 
 .report-note {
@@ -374,7 +413,6 @@
   .chart-container {
     margin-left: -0.25rem;
     margin-right: -0.25rem;
-    height: 320px
   }
 
   .card {
