@@ -1,5 +1,7 @@
 .dashboard {
   padding: 1.5rem;
+  
+
   max-width: 1200px;
   margin: 0 auto;
 }
@@ -402,11 +404,13 @@
 @media (max-width: 767px) {
   .dashboard {
     padding: 0.75rem;
+    
+
     max-width: 100%;
   }
   .card--wide {
     margin-left: -0.5rem;
-    margin-left: -0.5rem;
+    margin-right: -0.5rem;
     border-radius: 0;
   }
 

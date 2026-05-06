@@ -103,6 +103,14 @@ export default function GlucoseLogging() {
     fetchSettings();
   }, []);
 
+  useEffect(() => {
+  const container = document.querySelector('.page-content');
+
+  if (container) {
+    container.scrollTop = 0;
+  }
+}, []);
+
   const handleAddGlucose = async () => {
     const numericGlucose = Number(glucoseValue);
 
