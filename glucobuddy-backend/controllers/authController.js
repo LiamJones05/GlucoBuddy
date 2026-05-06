@@ -1,20 +1,28 @@
 ﻿const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { pool, poolConnect, sql } = require('../db');
+const asyncHandler = require('../utils/asyncHandler');
+
+if(!process.env.JWT_SECRET){
+  throw new Error('JWT_SECRET is not defined');
+}
 
 // REGISTER
-exports.register = async (req, res) => {
-  const { email, password, first_name, last_name } = req.body;
+exports.register = asyncHandler(async (req, res) => {
+  const { email, password, first_name, last_name } = req.validatedBody;
+
+  await poolConnect;
+
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
 
   try {
-    await poolConnect;
-
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Insert user
-    const result = await pool.request()
-      .input('email', email)
+    let userId;
+    const normalisedEmail = email.trim().toLowerCase();
+    const result = await new sql.Request(transaction)
+      .input('email', normalisedEmail)
       .input('password', hashedPassword)
       .input('first_name', first_name)
       .input('last_name', last_name)
@@ -24,10 +32,9 @@ exports.register = async (req, res) => {
         VALUES (@email, @password, @first_name, @last_name)
       `);
 
-    const userId = result.recordset[0].id;
+    userId = result.recordset[0].id;
 
-    // Create default settings
-    await pool.request()
+    await new sql.Request(transaction)
       .input('user_id', userId)
       .query(`
         INSERT INTO UserSettings (
@@ -46,140 +53,161 @@ exports.register = async (req, res) => {
         )
       `);
 
-    res.status(201).json({ message: 'User created', userId });
+    await transaction.commit();
 
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-};
-
-
-// LOGIN
-exports.login = async (req, res) => {
-  const { email, password } = req.body;
-
-  try {
-    await poolConnect;
-
-    // Find user
-    const result = await pool.request()
-      .input('email', email)
-      .query('SELECT * FROM Users WHERE email = @email');
-
-    if (result.recordset.length === 0) {
-      return res.status(400).json({ error: 'Invalid credentials' });
-    }
-
-    const user = result.recordset[0];
-
-    // Compare password
-    const validPassword = await bcrypt.compare(password, user.password_hash);
-    if (!validPassword) {
-      return res.status(400).json({ error: 'Invalid credentials' });
-    }
-
-    // Create JWT
-    const token = jwt.sign(
-      { id: user.id },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    res.json({
-      token,
-      userId: user.id,
-      user: {
-        id: user.id,
-        email: user.email,
-        first_name: user.first_name,
-        last_name: user.last_name,
-        name: [user.first_name, user.last_name].filter(Boolean).join(' '),
-      },
+    return res.status(201).json({
+      message: 'User created',
+      userId
     });
 
   } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-};
-// CURRENT USER
-exports.me = async (req, res) => {
-  try {
-    await poolConnect;
+    await transaction.rollback();
 
-    const result = await pool.request()
-      .input('user_id', req.user.id)
-      .query(`
-        SELECT id, email, first_name, last_name
-        FROM Users
-        WHERE id = @user_id
-      `);
-
-    const user = result.recordset[0];
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+    if (err.number === 2627 || err.number === 2601) {
+      const error = new Error('Email already exists');
+      error.status = 400;
+      throw error;
     }
 
-    res.json({
+    throw err;
+  }
+});
+
+
+// LOGIN
+exports.login = asyncHandler(async (req, res) => {
+  const { email, password } = req.validatedBody;
+
+  await poolConnect;
+
+  // Find user
+  const normalisedEmail = email.trim().toLowerCase();
+  const result = await pool.request()
+    .input('email', normalisedEmail)
+    .query(`
+      SELECT id, email, password_hash, first_name, last_name
+      FROM Users
+      WHERE email = @email
+    `);
+
+  if (result.recordset.length === 0) {
+    const err = new Error('Invalid credentials');
+    err.status = 401;
+    throw err;
+  }
+
+  const user = result.recordset[0];
+
+  // Compare password
+  const validPassword = await bcrypt.compare(password, user.password_hash);
+
+  if (!validPassword) {
+    const err = new Error('Invalid credentials');
+    err.status = 401;
+    throw err;
+  }
+
+  // Create JWT
+  const token = jwt.sign(
+    { id: user.id },
+    process.env.JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+
+  res.json({
+    token,
+    userId: user.id,
+    user: {
       id: user.id,
       email: user.email,
       first_name: user.first_name,
       last_name: user.last_name,
-      name: [user.first_name, user.last_name].filter(Boolean).join(' '),
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+      name: [user.first_name, user.last_name]
+        .filter(Boolean)
+        .join(' ')
+    }
+  });
+});
+
+
+// CURRENT USER
+exports.me = asyncHandler(async (req, res) => {
+  await poolConnect;
+
+  const result = await pool.request()
+    .input('user_id', req.user.id)
+    .query(`
+      SELECT id, email, first_name, last_name
+      FROM Users
+      WHERE id = @user_id
+    `);
+
+  const user = result.recordset[0];
+
+  if (!user) {
+    const err = new Error('User not found');
+    err.status = 404;
+    throw err;
   }
-};
+
+  res.json({
+    id: user.id,
+    email: user.email,
+    first_name: user.first_name,
+    last_name: user.last_name,
+    name: [user.first_name, user.last_name]
+      .filter(Boolean)
+      .join(' ')
+  });
+});
 
 // Delete Account
-exports.deleteAccount = async (req, res) => {
-  const { password } = req.body;
+exports.deleteAccount = asyncHandler(async (req, res) => {
+  const { password } = req.validatedBody;
 
-  if (!password) {
-    return res.status(400).json({ error: 'Password is required' });
+  await poolConnect;
+
+  // Get user from token
+  const result = await pool.request()
+    .input('user_id', req.user.id)
+    .query(`
+      SELECT id, password_hash
+      FROM Users
+      WHERE id = @user_id
+    `);
+
+  if (result.recordset.length === 0) {
+    const err = new Error('User not found');
+    err.status = 404;
+    throw err;
   }
 
-  try {
-    await poolConnect;
+  const user = result.recordset[0];
 
-    // Get user from token
-    const result = await pool.request()
-      .input('user_id', req.user.id)
-      .query(`
-        SELECT id, password_hash
-        FROM Users
-        WHERE id = @user_id
-      `);
+  // Verify password
+  const validPassword = await bcrypt.compare(
+    password,
+    user.password_hash
+  );
 
-    if (result.recordset.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const user = result.recordset[0];
-
-    // Verify password
-    const validPassword = await bcrypt.compare(password, user.password_hash);
-
-    if (!validPassword) {
-      return res.status(400).json({ error: 'Incorrect password' });
-    }
-
-    // Delete user (cascade handles everything else)
-    await pool.request()
-      .input('user_id', user.id)
-      .query(`
-        DELETE FROM Users
-        WHERE id = @user_id
-      `);
-
-    return res.json({ message: 'Account deleted successfully' });
-
-  } catch (err) {
-    console.error('DELETE ACCOUNT ERROR:', err);
-    return res.status(500).json({ error: err.message });
+  if (!validPassword) {
+    const err = new Error('Incorrect password');
+    err.status = 401;
+    throw err;
   }
-};
+
+  // Delete user
+  await pool.request()
+    .input('user_id', user.id)
+    .query(`
+      DELETE FROM Users
+      WHERE id = @user_id
+    `);
+
+  res.json({
+    message: 'Account deleted successfully'
+  });
+});
 
 
 

@@ -22,10 +22,10 @@
 
 /* Card style */
 .settings-card {
-  background: white;
+  background: var(--card);
   padding: 1rem;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  border: 1px solid var(--border);
   margin-bottom: 1rem;
   width: 100%;
   max-width: 600px;
@@ -41,7 +41,7 @@
   display: block;
   font-size: 0.85rem;
   font-weight: 600;
-  color: #475569;
+  color: var(--text-secondary);
   margin-bottom: 0.35rem;
   margin-top: 0.75rem;
 }
@@ -57,8 +57,10 @@
   box-sizing: border-box;
   padding: 0.6rem 0.75rem;
   margin-bottom: 0.75rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  border-radius: 16px;
   font-size: 0.95rem;
   outline: none;
   transition: border 0.2s ease, box-shadow 0.2s ease;
@@ -71,23 +73,23 @@
 
 /* Save button */
 .settings button {
-  background: #2563eb;
+  background: var(--primary);
   color: white;
   padding: 0.6rem 1rem;
   border: none;
-  border-radius: 6px;
+  border-radius: 16px;
   cursor: pointer;
   font-size: 0.95rem;
-  transition: all 0.15s ease;
+  transition: all 0.2s var(--ease-ios);
 }
 
 .settings button:hover {
-  background: #1d4ed8;
+  background: var(--primary-hover);
   transform: translateY(-1px);
 }
 
 .settings button:active {
-  transform: translateY(0);
+  transform: scale(0.97);
 }
 
 /* Desktop layout */
@@ -104,9 +106,9 @@
 .danger-zone {
   margin-top: 2rem;
   padding-top: 1.5rem;
-  border-top: 1px solid #e2e8f0;
-  border: 1px solid #fecaca;
-  background: #fff1f2;
+  border-top: 1px solid var(--border);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: var(--card);
   position: relative;
   overflow: hidden;
 }
@@ -122,12 +124,12 @@
 }
 
 .danger-zone h3 {
-  color: #991b1b;
+  color: #ef4444;
 }
 
 .danger-text {
   font-size: 0.9rem;
-  color: #7f1d1d;
+  color: #f87171;
   margin-bottom: 0.75rem;
 }
 
@@ -136,7 +138,7 @@
   background: #dc2626;
   color: white;
   padding: 0.55rem 0.9rem;
-  border-radius: 6px;
+  border-radius: 16px;
   border: none;
   cursor: pointer;
   font-size: 0.9rem;
@@ -178,7 +180,9 @@
 
 /* Modal container */
 .modal {
-  background: white;
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
   padding: 1.5rem;
   border-radius: 12px;
   width: 90%;
@@ -205,7 +209,7 @@
 
 .modal p {
   font-size: 0.9rem;
-  color: #475569;
+  color: var(--text-secondary);
 }
 
 /* Modal actions */
@@ -217,8 +221,8 @@
 }
 
 .modal-actions button:first-child {
-  background: #e2e8f0;
-  color: #1e293b;
+  background: var(--bg-secondary);
+  color: var(--text);
 }
 
 .modal-actions button:first-child:hover {
@@ -233,10 +237,10 @@
 }
 
 .download-btn {
-  background: #0f766e;
+  background: #0ea5a4;
   color: white;
   padding: 0.55rem 0.9rem;
-  border-radius: 6px;
+  border-radius: 16px;
   border: none;
   cursor: pointer;
   font-size: 0.9rem;
@@ -246,10 +250,10 @@
   background: #0d5f5b;
 }
 .export-card {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
   padding: 1rem;
-  border-radius: 8px;
+  border-radius: 16px;
   margin-top: 1.25rem;
 }
 
@@ -259,24 +263,24 @@
 
 .export-card p {
   font-size: 0.85rem;
-  color: #475569;
+  color: var(--text-secondary);
   margin-bottom: 0.75rem;
 }
 
 .upload-zone {
   margin-top: 0.75rem;
   padding: 1.25rem;
-  border: 2px dashed #cbd5e1;
   border-radius: 10px;
-  background: #f8fafc;
+  background: var(--bg-secondary);
+  border: 2px dashed var(--border); 
   text-align: center;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .upload-zone:hover {
-  border-color: #3b82f6;
-  background: #eff6ff;
+  border-color: var(--accent);
+  background: rgba(59, 130, 246, 0.1);
 }
 
 .upload-zone:active {
@@ -284,25 +288,22 @@
 }
 .upload-zone.drag-active {
   border-color: #2563eb;
-  background: #dbeafe;
+  background: rgba(59, 130, 246, 0.2);
 }
 
 /* Text styling */
 .upload-title {
   font-size: 0.95rem;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--text);
   margin-bottom: 0.25rem;
 }
 
 .upload-subtext {
   font-size: 0.8rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
-.upload-zone.drag-active {
-  border-color: #2563eb;
-  background: #dbeafe;
-}
+
 
 .upload-file {
   margin-top: 0.5rem;
@@ -313,9 +314,10 @@
 .import-preview {
   margin-top: 1rem;
   padding: 1rem;
-  border-radius: 8px;
-  background: #f1f5f9;
-  border: 1px solid #cbd5e1;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
 }
 
 .import-preview h4 {
@@ -325,4 +327,15 @@
 .import-preview p {
   font-size: 0.9rem;
   margin: 0.25rem 0;
+}
+.settings-card:hover,
+.export-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  transform: translateY(-1px);
+}
+.settings-card,
+.export-card {
+  transition:
+    transform 0.2s var(--ease-ios),
+    box-shadow 0.25s var(--ease-ios);
 }

@@ -11,13 +11,11 @@ app.get('/', (req, res) => {
   res.send('GlucoBuddy API running');
 });
 
-const PORT = 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+
 
 const authRoutes = require('./routes/auth');
 const settingsRoutes = require('./routes/settings');
+const errorHandler = require('./middleware/errorMiddleware');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/settings', settingsRoutes);
@@ -27,3 +25,10 @@ app.use('/api/meals', require('./routes/meals'));
 app.use('/api/dose', require('./routes/dose'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/data', require('./routes/data'));
+
+app.use(errorHandler);
+
+const PORT = 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});

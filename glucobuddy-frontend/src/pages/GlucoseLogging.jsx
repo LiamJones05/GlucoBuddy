@@ -1,5 +1,11 @@
 ﻿import { useEffect, useState } from 'react';
-import API from '../api/api';
+import {
+  getGlucoseByDate,
+  createGlucose,
+} from '../api/services/glucoseService';
+
+import { getInsulinByDate } from '../api/services/insulinService';
+import { getSettings } from '../api/services/settingsService';
 import '../styles/dashboard.css';
 import GlucoseChart from '../components/GlucoseChart';
 import { buildChartData } from '../utils/iob';
@@ -39,14 +45,14 @@ export default function GlucoseLogging() {
 
     try {
       const [glucoseRes, insulinRes] = await Promise.all([
-        API.get(`/glucose?date=${dateToLoad}`),
-        API.get(`/insulin?date=${dateToLoad}`),
+        getGlucoseByDate(dateToLoad),
+        getInsulinByDate(dateToLoad),
       ]);
 
       const formattedGlucose = glucoseRes.data
         .map((entry) => ({
           id: entry.id,
-          time: entry.logged_time.slice(0, 5),
+          time: entry.logged_time?.slice(0, 5) || '00:00',
           glucose: Number(entry.glucose_level),
           minutesSinceMidnight: parseMinutesSinceMidnight(entry.logged_time),
           loggedAt: entry.logged_at,
@@ -83,7 +89,7 @@ export default function GlucoseLogging() {
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const res = await API.get('/settings');
+        const res = await getSettings();
         setSettings({
           target_min: Number(res.data.target_min),
           target_max: Number(res.data.target_max),
@@ -115,7 +121,7 @@ export default function GlucoseLogging() {
     setSaveSuccess('');
 
     try {
-      await API.post('/glucose', {
+      await createGlucose({
         glucose_level: numericGlucose,
         logged_at: `${readingDate}T${readingTime}:00`,
       });
@@ -131,7 +137,11 @@ export default function GlucoseLogging() {
       }
     } catch (err) {
       console.error('Error saving glucose reading:', err);
-      setSaveError(err.response?.data?.error || 'Unable to save glucose reading.');
+      setSaveError(
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        'Unable to save glucose reading.'
+      );
     } finally {
       setIsSaving(false);
     }

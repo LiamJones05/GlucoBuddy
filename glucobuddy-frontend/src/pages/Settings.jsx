@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import API from '../api/api';
+import { getSettings, updateSettings } from '../api/services/settingsService';
+import { exportData, previewImport, importData } from '../api/services/dataService';
 import '../styles/settings.css';
 
 export default function Settings() {
@@ -20,12 +21,18 @@ export default function Settings() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    API.get('/settings').then(res => setSettings(res.data));
+  getSettings()
+    .then(res => setSettings(res.data))
+    .catch(() => alert('Failed to load settings'));
   }, []);
 
   const update = async () => {
-    await API.put('/settings', settings);
-    alert('Updated');
+    try {
+      await updateSettings(settings);
+      alert('Settings updated');
+    } catch (err) {
+      alert(err.response?.data?.error || 'Update failed');
+    }
   };
 
   // ---------------- DELETE ----------------
@@ -34,13 +41,8 @@ export default function Settings() {
     setDeleteError('');
 
     try {
-      const token = localStorage.getItem('token');
-
       await API.delete('/auth/account', {
         data: { password },
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
       });
 
       localStorage.removeItem('token');
@@ -56,9 +58,7 @@ export default function Settings() {
   // ---------------- DOWNLOAD ----------------
   const handleDownload = async () => {
     try {
-      const response = await API.get('/data/export', {
-        responseType: 'blob',
-      });
+      const response = await exportData();
 
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
@@ -87,30 +87,29 @@ export default function Settings() {
     const data = JSON.parse(text);
 
     // Call preview endpoint
-    const res = await API.post('/data/preview', data);
+    const res = await previewImport(data);
 
     setImportPreview(res.data);
     setPendingImportData(data);
 
   } catch (err) {
     console.error(err);
-    alert('Invalid file or preview failed');
+    alert(err.response?.data?.error || 'Invalid file or preview failed');
   }
 };
 
 const confirmImport = async () => {
   try {
-    await API.post('/data/import', pendingImportData);
+    await importData(pendingImportData);
 
     alert('Data restored successfully');
     window.location.reload();
 
   } catch (err) {
-    alert('Import failed');
+    alert(err.response?.data?.error || 'Import failed');
   }
 };
 
- 
 
   return (
     <>

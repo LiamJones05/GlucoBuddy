@@ -1,4 +1,5 @@
 ﻿const { pool, poolConnect, sql } = require('../db');
+const asyncHandler = require('../utils/asyncHandler');
 const {
   DATE_PATTERN,
   DATE_TIME_PATTERN,
@@ -29,58 +30,15 @@ async function insulinTableHasLoggedAtColumn(transaction) {
   return Boolean(result.recordset[0]?.has_logged_at);
 }
 
-exports.createInsulin = async (req, res) => {
-  const { units, insulin_type, logged_at, glucose_level } = req.body;
-  const numericUnits = Number(units);
-  const VALID_INSULIN_TYPES = ['rapid', 'long'];
+exports.createInsulin = asyncHandler(async (req, res) => {
+  const {
+  units,
+  insulin_type,
+  logged_at,
+  glucose_level,
+} = req.validatedBody;
 
-// Default to rapid if missing/invalid
-const insulinType = VALID_INSULIN_TYPES.includes(
-  (insulin_type || '').toLowerCase().trim()
-)
-  ? insulin_type.toLowerCase().trim()
-  : 'rapid';
-  const numericGlucose =
-    glucose_level === undefined || glucose_level === null || glucose_level === ''
-      ? null
-      : Number(glucose_level);
-
-  const MAX_INSULIN_UNITS = 50;
-
-  if (!Number.isFinite(numericUnits)) {
-  return res.status(400).json({ error: 'units must be a number' });
-  }
-
-  if (numericUnits <= 0) {
-    return res.status(400).json({ error: 'units must be greater than 0' });
-  }
-
-  if (numericUnits > MAX_INSULIN_UNITS) {
-    return res.status(400).json({ error: `units must not exceed ${MAX_INSULIN_UNITS}` });
-  }
-    
-  
-
-  if (!insulinType) {
-    return res.status(400).json({ error: 'insulin_type is required' });
-  }
-
-  if (logged_at && !DATE_TIME_PATTERN.test(logged_at)) {
-    return res.status(400).json({
-      error: 'logged_at must be in YYYY-MM-DDTHH:mm or YYYY-MM-DDTHH:mm:ss format',
-    });
-  }
-
-  if (
-  numericGlucose !== null &&
-  (!Number.isFinite(numericGlucose) || numericGlucose <= 0 || numericGlucose > 30)){
-    return res.status(400).json({
-      error: 'glucose_level must be a positive number when provided',
-    });
-  }
-
-  try {
-    await poolConnect;
+  await poolConnect;
 
     const {
       loggedAtText,
@@ -97,8 +55,8 @@ const insulinType = VALID_INSULIN_TYPES.includes(
       const hasLoggedAtColumn = await insulinTableHasLoggedAtColumn(transaction);
       const insulinRequest = new sql.Request(transaction)
         .input('user_id', sql.Int, req.user.id)
-        .input('units', sql.Decimal(6, 2), numericUnits)
-        .input('type', sql.NVarChar(50), insulinType)
+        .input('units', sql.Decimal(6, 2), units)
+        .input('type', sql.NVarChar(50), insulin_type)
         .input('logged_date', sql.Date, loggedDate)
         .input('logged_time', sql.Time, buildSqlTimeValue(loggedTime));
 
@@ -143,10 +101,10 @@ const insulinType = VALID_INSULIN_TYPES.includes(
 
       await insulinRequest.query(insulinInsertQuery);
 
-      if (numericGlucose !== null) {
+      if (glucose_level !== null) {
         await new sql.Request(transaction)
           .input('user_id', sql.Int, req.user.id)
-          .input('glucose_level', sql.Float, numericGlucose)
+          .input('glucose_level', sql.Float, glucose_level)
           .input('logged_date', sql.Date, loggedDate)
           .input('logged_time', sql.Time, buildSqlTimeValue(loggedTime))
           .query(`
@@ -168,9 +126,9 @@ const insulinType = VALID_INSULIN_TYPES.includes(
       await transaction.commit();
 
       return res.status(201).json({
-        message: numericGlucose !== null ? 'Insulin and glucose logged' : 'Insulin logged',
+        message: glucose_level !== null ? 'Insulin and glucose logged' : 'Insulin logged',
         logged_at: loggedAtText,
-        glucose_logged: numericGlucose !== null,
+        glucose_logged: glucose_level !== null,
       });
     } catch (err) {
       if (transaction) {
@@ -183,20 +141,19 @@ const insulinType = VALID_INSULIN_TYPES.includes(
 
       throw err;
     }
-  } catch (err) {
-    console.error('CREATE INSULIN ERROR:', err);
-    return res.status(500).json({ error: err.message });
-  }
-};
+  
+});
 
-exports.getInsulin = async (req, res) => {
+exports.getInsulin = asyncHandler(async (req, res) => {
   const { date } = req.query;
 
   if (date && !DATE_PATTERN.test(date)) {
-    return res.status(400).json({ error: 'date must be in YYYY-MM-DD format' });
+    const err = new Error('date must be in YYYY-MM-DD format');
+    err.status = 400;
+    throw err;
   }
 
-  try {
+  
     await poolConnect;
 
     let query = `
@@ -232,8 +189,5 @@ exports.getInsulin = async (req, res) => {
 
     const result = await request.query(query);
     return res.json(result.recordset);
-  } catch (err) {
-    console.error('GET INSULIN ERROR:', err);
-    return res.status(500).json({ error: err.message });
-  }
-};
+  
+});

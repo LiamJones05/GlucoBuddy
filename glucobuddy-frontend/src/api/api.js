@@ -1,33 +1,27 @@
 import axios from 'axios';
 
 const API = axios.create({
-  baseURL: '/api'
+  baseURL: '/api',
 });
 
 // Attach token automatically
 API.interceptors.request.use((req) => {
   const token = localStorage.getItem('token');
+
   if (token) {
-    req.headers.Authorization = token;
+    req.headers.Authorization = `Bearer ${token}`;
   }
+
   return req;
 });
 
+// Handle auth errors globally
 API.interceptors.response.use(
   (response) => response,
   (error) => {
     const status = error.response?.status;
-    const message = error.response?.data?.error;
 
-    if (
-      status === 401 &&
-      message &&
-      (
-        message === 'Invalid token' ||
-        message === 'Access denied' ||
-        message === 'User no longer exists. Please sign in again.'
-      )
-    ) {
+    if (status === 401) {
       localStorage.removeItem('token');
 
       if (window.location.pathname !== '/') {

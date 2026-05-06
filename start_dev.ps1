@@ -28,7 +28,7 @@ Write-Host "`n[2/4] Starting backend server..."
 
 Start-Process powershell -WindowStyle Minimized -ArgumentList @"
 cd glucobuddy-backend
-node server.js
+npm run dev
 "@
 
 Write-Host "Backend started"

@@ -16,10 +16,10 @@
 }
 
 .card {
-  background: white;
+  background: var(--card);
   padding: 0.9rem;
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border);
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
 
@@ -33,7 +33,7 @@
 
 .card-copy {
   margin: 0 0 1rem;
-  color: #64748b;
+  color: var(--text-secondary);;
 }
 
 .card-copy--tight {
@@ -41,6 +41,7 @@
 }
 
 .card--wide {
+  min-height: 300px;
   grid-column: 1 / -1;
   padding: 1.2rem;
 }
@@ -66,7 +67,7 @@
 
 .chart-subtitle {
   margin: 0 0 1rem;
-  color: #64748b;
+  color: var(--text-secondary);;
   font-size: 0.95rem;
 }
 
@@ -83,7 +84,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  color: #334155;
+  color: var(--text);
   font-size: 0.9rem;
 }
 
@@ -93,7 +94,7 @@
   width: 100%;
   max-width: 260px;
   padding: 0.55rem 0.65rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border);
   border-radius: 6px;
 }
 
@@ -113,7 +114,7 @@
 }
 
 .glucose-controls button {
-  background: #243f5c;
+  background: var(--primary);
   color: white;
 }
 
@@ -140,12 +141,12 @@
 }
 
 .button-primary {
-  background: #243f5c;
+  background: var(--primary);
   color: white;
 }
 
 .button-secondary {
-  background: #e2e8f0;
+  background: var(--secondary);
   color: #0f172a;
 }
 
@@ -162,8 +163,8 @@
 .insulin-form--advanced {
   padding: 0.9rem;
   margin-bottom: 0.75rem;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
   border-radius: 8px;
 }
 
@@ -196,7 +197,7 @@
 .dose-breakdown p,
 .insulin-note {
   margin: 0.35rem 0 0;
-  color: #475569;
+  color: var(--text-secondary);
 }
 
 .dose-assumptions {
@@ -213,7 +214,7 @@
 
 .dose-assumptions p {
   margin: 0.25rem 0 0;
-  color: #475569;
+  color: var(--text-secondary);
 }
 
 .form-success {
@@ -254,16 +255,16 @@
 
 .window-toggle__button {
   padding: 0.55rem 0.85rem;
-  background: #f8fafc;
-  color: #334155;
-  border: 1px solid #cbd5e1;
+  background: var(--bg-secondary);
+  color: var(--text);
+  border: 1px solid var(--border);
   border-radius: 999px;
   cursor: pointer;
   font-weight: 600;
 }
 
 .window-toggle__button--active {
-  background: #243f5c;
+  background: var(--primary);
   color: white;
   border-color: #243f5c;
 }
@@ -274,12 +275,12 @@
 
 .chart-empty {
   margin: 0.75rem 0 0;
-  color: #64748b;
+  color: var(--text-secondary);;
 }
 
 .chart-footnote {
   margin: 0.75rem 0 0;
-  color: #64748b;
+  color: var(--text-secondary);;
   font-size: 0.9rem;
 }
 
@@ -292,8 +293,9 @@
 .insight-card {
   padding: 0.85rem 0.9rem;
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
 }
 
 .insight-card--safety {
@@ -327,7 +329,7 @@
 
 .insight-card p {
   margin: 0.6rem 0 0;
-  color: #0f172a;
+  color: var(--text);
   line-height: 1.5;
 }
 
@@ -342,20 +344,20 @@
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  color: #334155;
+  color: var(--text);
   font-size: 0.9rem;
 }
 
 .report-controls input {
   min-width: 180px;
   padding: 0.5rem 0.6rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border);
   border-radius: 6px;
 }
 
 .report-note {
   margin: 0.85rem 0 0;
-  color: #64748b;
+  color: var(--text-secondary);;
 }
 
 @media (max-width: 767px) {
@@ -427,14 +429,16 @@
 .metrics-grid div {
   min-width: 0;
   padding: 0.85rem;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
   border-radius: 8px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
 }
 
 .metrics-grid span {
   display: block;
-  color: #64748b;
+  color: var(--text-secondary);
+  opacity: 0.85;
   font-size: 0.78rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -443,7 +447,7 @@
 .metrics-grid strong {
   display: block;
   margin-top: 0.35rem;
-  color: #0f172a;
+  color: var(--text);
   font-size: clamp(1rem, 2.6vw, 1.35rem);
   overflow-wrap: anywhere;
 }
@@ -481,7 +485,7 @@
 
 .prediction-copy {
   margin: 0;
-  color: #334155;
+  color: var(--text);
 }
 
 .quick-actions {
@@ -490,7 +494,7 @@
 
 .quick-actions a {
   padding: 0.65rem 0.85rem;
-  background: #243f5c;
+  background: var(--primary);
   color: white;
   border-radius: 8px;
   text-decoration: none;
@@ -530,7 +534,7 @@
 .insight-card small {
   display: block;
   margin-top: 0.45rem;
-  color: #64748b;
+  color: var(--text-secondary);;
   line-height: 1.4;
 }
 
@@ -597,4 +601,80 @@
     box-sizing: border-box;
     text-align: center;
   }
+}
+/* ---------------- NEW: DATA QUALITY WARNING ---------------- */
+.data-warning {
+  margin-bottom: 1rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  background: rgba(251, 146, 60, 0.1);
+  border: 1px solid rgba(251, 146, 60, 0.4);
+  color: #fb923c;
+  font-weight: 600;
+}
+
+/* ---------------- NEW: OVERALL STATUS ---------------- */
+.overall-status {
+  margin: 0;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.overall-status--good {
+  color: #166534;
+}
+
+.overall-status--moderate {
+  color: #92400e;
+}
+
+.overall-status--high {
+  color: #b91c1c;
+}
+
+/* ---------------- NEW: TARGET RANGE LABEL ---------------- */
+.target-range {
+  margin: 0.25rem 0 0.75rem;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+/* ---------------- NEW: CHART INSIGHT ---------------- */
+.chart-insight {
+  margin: 0.75rem 0 0;
+  font-size: 0.9rem;
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* ---------------- IMPROVE OVERVIEW META STRUCTURE ---------------- */
+.overview-meta {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.overview-meta ul {
+  margin: 0;
+  padding-left: 1rem;
+  color: var(--text-secondary);
+}
+
+.overview-meta li {
+  margin: 0.15rem 0;
+}
+
+/* ---------------- SMALL POLISH: PREDICTION ---------------- */
+.prediction-copy {
+  margin-top: 0.5rem;
+  font-weight: 500;
+}
+
+input {
+  background: var(--card);
+  color: var(--text);
+}
+.card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }

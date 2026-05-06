@@ -1,5 +1,7 @@
 ﻿import { useEffect, useState } from 'react';
-import API from '../api/api';
+import { getGlucoseAverages, getGlucoseInsights } from '../api/services/glucoseService';
+import { getSettings } from '../api/services/settingsService';
+import { getReportSummary } from '../api/services/reportService';
 import '../styles/dashboard.css';
 import GlucoseAverageChart from '../components/GlucoseAverageChart';
 import InsightList from '../components/InsightList';
@@ -32,16 +34,40 @@ function formatMetric(value, suffix = '') {
 }
 
 function formatDelta(value, suffix = '') {
-  if (!Number.isFinite(Number(value))) {
-    return 'No comparison';
-  }
-
+  if (!Number.isFinite(Number(value))) return 'No comparison';
   const numericValue = Number(value);
   return `${numericValue > 0 ? '+' : ''}${numericValue}${suffix}`;
 }
 
+// 🔥 NEW: overall status logic
+function getOverallStatus(metrics) {
+  if (!metrics) return null;
+
+  if (metrics.timeAboveRangePercent > 40) {
+    return { label: 'Above target range', level: 'high' };
+  }
+
+  if (metrics.timeInRangePercent > 70) {
+    return { label: 'Good control', level: 'good' };
+  }
+
+  return { label: 'Moderate control', level: 'moderate' };
+}
+
+// 🔥 NEW: find peak interval
+function getPeakInterval(data) {
+  if (!Array.isArray(data) || data.length === 0) return null;
+
+  const max = data.reduce((prev, curr) =>
+    curr.average > prev.average ? curr : prev
+  );
+
+  return max?.label || null;
+}
+
 export default function Dashboard() {
   const today = getLocalDateValue();
+
   const [averageWindow, setAverageWindow] = useState(14);
   const [averageData, setAverageData] = useState([]);
   const [averageMetrics, setAverageMetrics] = useState(null);
@@ -50,12 +76,16 @@ export default function Dashboard() {
   const [prediction, setPrediction] = useState(null);
   const [insights, setInsights] = useState([]);
   const [settings, setSettings] = useState(null);
+
   const [averageLoading, setAverageLoading] = useState(true);
   const [insightLoading, setInsightLoading] = useState(true);
+
   const [averageError, setAverageError] = useState('');
   const [insightError, setInsightError] = useState('');
+
   const [reportStartDate, setReportStartDate] = useState(getDateDaysAgoValue(13));
   const [reportEndDate, setReportEndDate] = useState(today);
+
   const [reportError, setReportError] = useState('');
   const [reportSuccess, setReportSuccess] = useState('');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
@@ -65,17 +95,17 @@ export default function Dashboard() {
     setAverageError('');
 
     try {
-      const res = await API.get(`/glucose/averages?days=${daysToLoad}`);
-      setAverageData(Array.isArray(res.data?.intervals) ? res.data.intervals : []);
+      const res = await getGlucoseAverages(daysToLoad);
+
+      setAverageData(res.data?.intervals || []);
       setAverageMetrics(res.data?.metrics || null);
       setTrendComparison(res.data?.trendComparison || null);
       setDataQuality(res.data?.dataQuality || null);
     } catch (err) {
-      console.error('Error fetching glucose averages:', err);
+      console.error(err);
       setAverageError('Unable to load average glucose trends.');
       setAverageData([]);
       setAverageMetrics(null);
-      setTrendComparison(null);
     } finally {
       setAverageLoading(false);
     }
@@ -86,15 +116,13 @@ export default function Dashboard() {
     setInsightError('');
 
     try {
-      const res = await API.get(`/glucose/insights?days=${INSIGHT_WINDOW}`);
-      setInsights(Array.isArray(res.data?.insights) ? res.data.insights : []);
+      const res = await getGlucoseInsights(INSIGHT_WINDOW);
+      setInsights(res.data?.insights || []);
       setPrediction(res.data?.prediction || null);
       setDataQuality((current) => res.data?.dataQuality || current);
     } catch (err) {
-      console.error('Error fetching glucose insights:', err);
+      console.error(err);
       setInsightError('Unable to load pattern-based recommendations.');
-      setInsights([]);
-      setPrediction(null);
     } finally {
       setInsightLoading(false);
     }
@@ -109,20 +137,9 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    const fetchSettings = async () => {
-      try {
-        const res = await API.get('/settings');
-        setSettings({
-          target_min: Number(res.data.target_min),
-          target_max: Number(res.data.target_max),
-        });
-      } catch (err) {
-        console.error('Error fetching settings:', err);
-        setSettings(null);
-      }
-    };
-
-    fetchSettings();
+    getSettings()
+      .then(res => setSettings(res.data))
+      .catch(() => setSettings(null));
   }, []);
 
   useEffect(() => {
@@ -132,91 +149,131 @@ export default function Dashboard() {
 
   const handleGenerateReport = async () => {
     if (!reportStartDate || !reportEndDate) {
-      setReportError('Select both a start and end date for the report.');
+      setReportError('Select both dates.');
       return;
     }
 
     if (reportEndDate < reportStartDate) {
-      setReportError('End date must be on or after the start date.');
+      setReportError('End date must be after start.');
       return;
     }
 
-    const dayCount = calculateInclusiveDayCount(reportStartDate, reportEndDate);
-    if (dayCount > MAX_REPORT_DAYS) {
-      setReportError(`Report range must be ${MAX_REPORT_DAYS} days or fewer.`);
+    const days = calculateInclusiveDayCount(reportStartDate, reportEndDate);
+
+    if (days > MAX_REPORT_DAYS) {
+      setReportError(`Max ${MAX_REPORT_DAYS} days.`);
       return;
     }
 
     setIsGeneratingReport(true);
-    setReportError('');
-    setReportSuccess('');
 
     try {
-      const res = await API.get(
-        `/reports/summary?startDate=${reportStartDate}&endDate=${reportEndDate}`
-      );
-      const report = res.data;
-      const chartImageDataUrl = await createReportChartImageDataUrl(report);
-      const fileName = await downloadReportPdf(report, chartImageDataUrl);
-      setReportSuccess(`Downloaded ${fileName}.`);
+      const res = await getReportSummary(reportStartDate, reportEndDate);
+      const chart = await createReportChartImageDataUrl(res.data);
+      const file = await downloadReportPdf(res.data, chart);
+      setReportSuccess(`Downloaded ${file}`);
     } catch (err) {
-      console.error('Error generating report:', err);
-      setReportError(err.response?.data?.error || 'Unable to generate the PDF report.');
+      setReportError('Failed to generate report.');
     } finally {
       setIsGeneratingReport(false);
     }
   };
 
-  const latestPrediction = prediction?.points?.[1] || prediction?.points?.[0] || null;
+  const latestPrediction =
+    prediction?.points?.[1] || prediction?.points?.[0];
+
+  const overallStatus = getOverallStatus(averageMetrics);
+  const peakInterval = getPeakInterval(averageData);
 
   return (
     <div className="dashboard">
       <h1 className="dashboard-title">Analytics</h1>
 
+      {/* 🔥 DATA QUALITY BANNER */}
+      {dataQuality?.warnings?.length ? (
+        <div className="data-warning">
+          ⚠️ {dataQuality.warnings[0]}
+        </div>
+      ) : null}
+
       <div className="dashboard-grid dashboard-grid--analytics">
+
+        {/* OVERVIEW */}
         <section className="card card--wide overview-card">
-          <div>
-            <h3>Clinical Overview</h3>
-            <p className="card-copy">Key metrics from the selected aggregation window.</p>
-          </div>
+          <h3>Clinical Overview</h3>
+
+          
+          {overallStatus && (
+            <p className={`overall-status overall-status--${overallStatus.level}`}>
+              Overall status: {overallStatus.label}
+            </p>
+          )}
 
           <div className="metrics-grid">
-            <div><span>Avg glucose</span><strong>{formatMetric(averageMetrics?.averageGlucose, ' mmol/L')}</strong></div>
-            <div><span>Time In Range</span><strong>{formatMetric(averageMetrics?.timeInRangePercent, '%')}</strong></div>
-            <div><span>Time Below Range</span><strong>{formatMetric(averageMetrics?.timeBelowRangePercent, '%')}</strong></div>
-            <div><span>Time Above Range</span><strong>{formatMetric(averageMetrics?.timeAboveRangePercent, '%')}</strong></div>
-            <div><span>Standard Deviation</span><strong>{formatMetric(averageMetrics?.standardDeviation, ' mmol/L')}</strong></div>
-            <div><span>Coefficient Variation</span><strong>{formatMetric(averageMetrics?.coefficientOfVariation, '%')}</strong></div>
-          </div>
-
-          <div className="overview-meta">
-            <span>Compared with previous {averageWindow} days: TIR {formatDelta(trendComparison?.timeInRangeDelta, '%')}, hypos {formatDelta(trendComparison?.hypoCountDelta)}</span>
-            {dataQuality?.confidence ? <span className={`confidence-pill confidence-pill--${dataQuality.confidence}`}>{dataQuality.confidence} confidence</span> : null}
-          </div>
-
-          {latestPrediction ? (
-            <p className="prediction-copy">Predicted glucose in {latestPrediction.minutesAhead} minutes: <strong>{latestPrediction.predictedGlucose} mmol/L</strong> ({prediction.confidence} confidence).</p>
-          ) : null}
-
-          {dataQuality?.warnings?.length ? (
-            <p className="report-note">{dataQuality.warnings[0]}</p>
-          ) : null}
-        </section>
-
-        <section className="card card--wide">
-          <div className="averages-header">
             <div>
-              <h3>Time-of-Day Averages</h3>
-              <p className="card-copy">Average glucose across each 2-hour interval over recent history.</p>
+              <span>Avg glucose</span>
+              <strong>{formatMetric(averageMetrics?.averageGlucose, ' mmol/L')}</strong>
             </div>
 
-            <div className="window-toggle" role="tablist" aria-label="Average glucose time window">
-              {AVERAGE_WINDOWS.map((days) => (
+            <div>
+              <span>Time In Range</span>
+              <strong>{formatMetric(averageMetrics?.timeInRangePercent, '%')}</strong>
+            </div>
+
+            <div>
+              <span>Time Below</span>
+              <strong>{formatMetric(averageMetrics?.timeBelowRangePercent, '%')}</strong>
+            </div>
+
+            <div>
+              <span>Time Above</span>
+              <strong>{formatMetric(averageMetrics?.timeAboveRangePercent, '%')}</strong>
+            </div>
+
+            <div>
+              <span>SD</span>
+              <strong>{formatMetric(averageMetrics?.standardDeviation, ' mmol/L')}</strong>
+            </div>
+
+            <div>
+              <span>CV</span>
+              <strong>{formatMetric(averageMetrics?.coefficientOfVariation, '%')}</strong>
+            </div>
+          </div>
+
+          {/* 🔥 CLEAN COMPARISON */}
+          <div className="overview-meta">
+            <p>
+              Compared to previous {averageWindow} days:
+            </p>
+            <ul>
+              <li>TIR: {formatDelta(trendComparison?.timeInRangeDelta, '%')}</li>
+              <li>Hypos: {formatDelta(trendComparison?.hypoCountDelta)}</li>
+            </ul>
+          </div>
+
+          {/* 🔥 CLEAN PREDICTION */}
+          {latestPrediction && (
+            <p className="prediction-copy">
+              Predicted glucose ({latestPrediction.minutesAhead / 60}h):{' '}
+              <strong>{latestPrediction.predictedGlucose} mmol/L</strong>
+            </p>
+          )}
+        </section>
+
+        {/* AVERAGES */}
+        <section className="card card--wide">
+          <div className="averages-header">
+            <h3>Time-of-Day Averages</h3>
+
+            <div className="window-toggle">
+              {AVERAGE_WINDOWS.map(days => (
                 <button
                   key={days}
-                  type="button"
-                  className={`window-toggle__button ${averageWindow === days ? 'window-toggle__button--active' : ''}`}
                   onClick={() => setAverageWindow(days)}
+                  className={`window-toggle__button ${
+                    averageWindow === days ? 'window-toggle__button--active' : ''
+                  }`}
                 >
                   {days} days
                 </button>
@@ -224,36 +281,51 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {averageError ? <p className="form-error">{averageError}</p> : null}
+          {/* 🔥 TARGET RANGE LABEL */}
+          {settings && (
+            <p className="target-range">
+              Target range: {settings.target_min} – {settings.target_max} mmol/L
+            </p>
+          )}
 
           {averageLoading ? (
-            <p>Loading averages...</p>
+            <p>Loading...</p>
           ) : (
-            <GlucoseAverageChart
-              data={averageData}
-              days={averageWindow}
-              targetMin={settings?.target_min}
-              targetMax={settings?.target_max}
-            />
+            <>
+              <GlucoseAverageChart
+                data={averageData}
+                days={averageWindow}
+                targetMin={settings?.target_min}
+                targetMax={settings?.target_max}
+              />
+
+              {/* 🔥 PEAK INSIGHT */}
+              {peakInterval && (
+                <p className="chart-insight">
+                  Highest average glucose: {peakInterval}
+                </p>
+              )}
+            </>
           )}
         </section>
 
+        {/* INSIGHTS */}
         <section className="card">
           <h3>Pattern-Based Insights</h3>
-          <p className="card-copy">Rule-based observations from the last {INSIGHT_WINDOW} days.</p>
-
-          {insightError ? <p className="form-error">{insightError}</p> : null}
 
           {insightLoading ? (
-            <p>Loading insights...</p>
+            <p>Loading...</p>
           ) : (
-            <InsightList insights={insights} days={INSIGHT_WINDOW} />
+            <InsightList insights={insights} />
           )}
         </section>
 
+        {/* REPORT */}
         <section className="card">
           <h3>Clinical Report</h3>
-          <p className="card-copy">Generate a PDF with metrics, insights, a glucose chart, and time-of-day averages.</p>
+          <p className="card-copy card-copy--tight">
+            Generate a PDF with metrics, insights, and glucose trends for a selected date range.
+          </p>
 
           <div className="report-controls report-controls--stacked">
             <label>
@@ -284,11 +356,10 @@ export default function Dashboard() {
             </button>
           </div>
 
-          {reportError ? <p className="form-error">{reportError}</p> : null}
-          {reportSuccess ? <p className="form-success">{reportSuccess}</p> : null}
-
-          <p className="report-note">Reports are limited to {MAX_REPORT_DAYS} days and only include your signed-in data.</p>
+          {reportError && <p className="form-error">{reportError}</p>}
+          {reportSuccess && <p className="form-success">{reportSuccess}</p>}
         </section>
+
       </div>
     </div>
   );

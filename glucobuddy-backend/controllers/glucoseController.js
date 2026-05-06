@@ -1,12 +1,14 @@
 ﻿const { pool, poolConnect, sql } = require('../db');
+const asyncHandler = require('../utils/asyncHandler');
 const {
   DATE_PATTERN,
-  DATE_TIME_PATTERN,
   buildSqlTimeValue,
   splitLoggedAt,
 } = require('../utils/dateTime');
+
 const { buildPatternInsights } = require('../services/insightEngine');
 const { buildGlucosePrediction } = require('../services/predictionEngine');
+
 const {
   calculateClinicalMetrics,
   calculateTimeOfDayAverages,
@@ -95,211 +97,257 @@ async function loadInsulinRange(userId, startDate, endDate) {
   return result.recordset;
 }
 
-exports.createGlucose = async (req, res) => {
-  const { glucose_level, logged_at } = req.body;
-  const numericGlucose = Number(glucose_level);
+exports.createGlucose = asyncHandler(async (req, res) => {
+  const {
+    glucose_level,
+    logged_at,
+  } = req.validatedBody;
 
-  if (!Number.isFinite(numericGlucose) || numericGlucose <= 0) {
-    return res.status(400).json({ error: 'glucose_level must be a positive number' });
-  }
+  await poolConnect;
 
-  if (!logged_at || !DATE_TIME_PATTERN.test(logged_at)) {
-    return res.status(400).json({
-      error: 'logged_at must be in YYYY-MM-DDTHH:mm or YYYY-MM-DDTHH:mm:ss format',
-    });
-  }
+  const {
+    loggedAtText,
+    loggedDate,
+    loggedTime,
+  } = splitLoggedAt(logged_at);
 
-  try {
-    await poolConnect;
+  await pool
+    .request()
+    .input('user_id', sql.Int, req.user.id)
+    .input('glucose_level', sql.Float, glucose_level)
+    .input('logged_date', sql.Date, loggedDate)
+    .input('logged_time', sql.Time, buildSqlTimeValue(loggedTime))
+    .query(`
+      INSERT INTO GlucoseLogs (
+        user_id,
+        glucose_level,
+        logged_date,
+        logged_time
+      )
+      VALUES (
+        @user_id,
+        @glucose_level,
+        @logged_date,
+        @logged_time
+      )
+    `);
 
-    const { loggedAtText, loggedDate, loggedTime } = splitLoggedAt(logged_at);
+  return res.status(201).json({
+    message: 'Glucose logged',
+    logged_at: loggedAtText,
+  });
+});
 
-    await pool
-      .request()
-      .input('user_id', sql.Int, req.user.id)
-      .input('glucose_level', sql.Float, numericGlucose)
-      .input('logged_date', sql.Date, loggedDate)
-      .input('logged_time', sql.Time, buildSqlTimeValue(loggedTime))
-      .query(`
-        INSERT INTO GlucoseLogs (
-          user_id,
-          glucose_level,
-          logged_date,
-          logged_time
-        )
-        VALUES (
-          @user_id,
-          @glucose_level,
-          @logged_date,
-          @logged_time
-        )
-      `);
-
-    return res.status(201).json({
-      message: 'Glucose logged',
-      logged_at: loggedAtText,
-    });
-  } catch (err) {
-    console.error('CREATE GLUCOSE ERROR:', err);
-    return res.status(500).json({ error: err.message });
-  }
-};
-
-exports.getGlucose = async (req, res) => {
+exports.getGlucose = asyncHandler(async (req, res) => {
   const { date } = req.query;
 
   if (date && !DATE_PATTERN.test(date)) {
-    return res.status(400).json({ error: 'date must be in YYYY-MM-DD format' });
+    const err = new Error('date must be in YYYY-MM-DD format');
+    err.status = 400;
+    throw err;
   }
 
-  try {
-    await poolConnect;
+  await poolConnect;
 
-    let query = `
-      SELECT
-        id,
-        user_id,
-        glucose_level,
-        CONVERT(varchar(10), logged_date, 23) AS logged_date,
-        CONVERT(varchar(8), logged_time, 108) AS logged_time,
-        CONCAT(
-          CONVERT(varchar(10), logged_date, 23),
-          'T',
-          CONVERT(varchar(8), logged_time, 108)
-        ) AS logged_at
-      FROM GlucoseLogs
-      WHERE user_id = @user_id
-    `;
+  let query = `
+    SELECT
+      id,
+      user_id,
+      glucose_level,
+      CONVERT(varchar(10), logged_date, 23) AS logged_date,
+      CONVERT(varchar(8), logged_time, 108) AS logged_time,
+      CONCAT(
+        CONVERT(varchar(10), logged_date, 23),
+        'T',
+        CONVERT(varchar(8), logged_time, 108)
+      ) AS logged_at
+    FROM GlucoseLogs
+    WHERE user_id = @user_id
+  `;
 
-    const request = pool.request().input('user_id', sql.Int, req.user.id);
+  const request = pool.request()
+    .input('user_id', sql.Int, req.user.id);
 
-    if (date) {
-      query += ' AND logged_date = @date';
-      request.input('date', sql.Date, date);
-    }
-
-    query += ' ORDER BY logged_date ASC, logged_time ASC';
-
-    const result = await request.query(query);
-    return res.json(result.recordset);
-  } catch (err) {
-    console.error('GET GLUCOSE ERROR:', err);
-    return res.status(500).json({ error: err.message });
+  if (date) {
+    query += ' AND logged_date = @date';
+    request.input('date', sql.Date, date);
   }
-};
 
-exports.getGlucoseAverages = async (req, res) => {
+  query += ' ORDER BY logged_date ASC, logged_time ASC';
+
+  const result = await request.query(query);
+
+  return res.json(result.recordset);
+});
+
+exports.getGlucoseAverages = asyncHandler(async (req, res) => {
   const days = Number(req.query.days || 14);
 
   if (!VALID_TIME_WINDOWS.has(days)) {
-    return res.status(400).json({ error: 'days must be one of 14, 30, or 90' });
+    const err = new Error('days must be one of 14, 30, or 90');
+    err.status = 400;
+    throw err;
   }
 
-  try {
-    await poolConnect;
+  await poolConnect;
 
-    const today = new Date();
-    const startDate = shiftLocalDate(today, -(days - 1));
-    const startDateValue = formatLocalDate(startDate);
-    const endDateValue = formatLocalDate(today);
-    const previousStartDateValue = formatLocalDate(shiftLocalDate(startDate, -days));
-    const previousEndDateValue = formatLocalDate(shiftLocalDate(startDate, -1));
+  const today = new Date();
 
-    const [settings, glucoseRows, previousGlucoseRows] = await Promise.all([
-      loadSettings(req.user.id),
-      loadGlucoseRange(req.user.id, startDateValue, endDateValue),
-      loadGlucoseRange(req.user.id, previousStartDateValue, previousEndDateValue),
-    ]);
+  const startDate = shiftLocalDate(today, -(days - 1));
 
-    if (!settings) {
-      return res.status(400).json({ error: 'Settings not found' });
-    }
+  const startDateValue = formatLocalDate(startDate);
+  const endDateValue = formatLocalDate(today);
 
-    const intervals = calculateTimeOfDayAverages(glucoseRows, settings);
-    const metrics = calculateClinicalMetrics(glucoseRows, settings);
-    const previousMetrics = calculateClinicalMetrics(previousGlucoseRows, settings);
-    const trendComparison = compareMetrics(metrics, previousMetrics);
-    const dataQuality = assessDataQuality(glucoseRows, startDateValue, endDateValue);
+  const previousStartDateValue = formatLocalDate(
+    shiftLocalDate(startDate, -days)
+  );
 
-    return res.json({
-      days,
-      startDate: startDateValue,
-      endDate: endDateValue,
-      intervals,
-      metrics,
-      previousMetrics,
-      trendComparison,
-      dataQuality,
-    });
-  } catch (err) {
-    console.error('GET GLUCOSE AVERAGES ERROR:', err);
-    return res.status(500).json({ error: err.message });
+  const previousEndDateValue = formatLocalDate(
+    shiftLocalDate(startDate, -1)
+  );
+
+  const [
+    settings,
+    glucoseRows,
+    previousGlucoseRows,
+  ] = await Promise.all([
+    loadSettings(req.user.id),
+    loadGlucoseRange(req.user.id, startDateValue, endDateValue),
+    loadGlucoseRange(req.user.id, previousStartDateValue, previousEndDateValue),
+  ]);
+
+  if (!settings) {
+    const err = new Error('Settings not found');
+    err.status = 400;
+    throw err;
   }
-};
 
-exports.getGlucoseInsights = async (req, res) => {
+  const intervals = calculateTimeOfDayAverages(
+    glucoseRows,
+    settings
+  );
+
+  const metrics = calculateClinicalMetrics(
+    glucoseRows,
+    settings
+  );
+
+  const previousMetrics = calculateClinicalMetrics(
+    previousGlucoseRows,
+    settings
+  );
+
+  const trendComparison = compareMetrics(
+    metrics,
+    previousMetrics
+  );
+
+  const dataQuality = assessDataQuality(
+    glucoseRows,
+    startDateValue,
+    endDateValue
+  );
+
+  return res.json({
+    days,
+    startDate: startDateValue,
+    endDate: endDateValue,
+    intervals,
+    metrics,
+    previousMetrics,
+    trendComparison,
+    dataQuality,
+  });
+});
+
+exports.getGlucoseInsights = asyncHandler(async (req, res) => {
   const days = Number(req.query.days || 30);
 
   if (!VALID_TIME_WINDOWS.has(days)) {
-    return res.status(400).json({ error: 'days must be one of 14, 30, or 90' });
+    const err = new Error('days must be one of 14, 30, or 90');
+    err.status = 400;
+    throw err;
   }
 
-  try {
-    await poolConnect;
+  await poolConnect;
 
-    const today = new Date();
-    const startDate = shiftLocalDate(today, -(days - 1));
-    const startDateValue = formatLocalDate(startDate);
-    const endDateValue = formatLocalDate(today);
-    const insulinStartDateValue = formatLocalDate(shiftLocalDate(startDate, -1));
+  const today = new Date();
 
-    const [settings, glucoseRows, insulinRows] = await Promise.all([
-      loadSettings(req.user.id),
-      loadGlucoseRange(req.user.id, startDateValue, endDateValue),
-      loadInsulinRange(req.user.id, insulinStartDateValue, endDateValue),
-    ]);
+  const startDate = shiftLocalDate(today, -(days - 1));
 
-    if (!settings) {
-      return res.status(400).json({ error: 'Settings not found' });
-    }
+  const startDateValue = formatLocalDate(startDate);
+  const endDateValue = formatLocalDate(today);
 
-    const targetMin = Number(settings.target_min);
-    const targetMax = Number(settings.target_max);
-    const correctionRatio = Number(settings.correction_ratio);
+  const insulinStartDateValue = formatLocalDate(
+    shiftLocalDate(startDate, -1)
+  );
 
-    if (!Number.isFinite(targetMin) || !Number.isFinite(targetMax)) {
-      return res.status(400).json({ error: 'Your target range settings must be valid numbers' });
-    }
+  const [
+    settings,
+    glucoseRows,
+    insulinRows,
+  ] = await Promise.all([
+    loadSettings(req.user.id),
+    loadGlucoseRange(req.user.id, startDateValue, endDateValue),
+    loadInsulinRange(req.user.id, insulinStartDateValue, endDateValue),
+  ]);
 
-    if (!Number.isFinite(correctionRatio) || correctionRatio <= 0) {
-      return res.status(400).json({ error: 'Your correction ratio setting must be greater than zero' });
-    }
-
-    const insights = buildPatternInsights({
-      glucoseReadings: glucoseRows,
-      insulinLogs: insulinRows,
-      settings,
-      analysisDays: days,
-      endDate: endDateValue,
-    });
-    const prediction = buildGlucosePrediction({
-      glucoseReadings: glucoseRows,
-      insulinLogs: insulinRows,
-      settings,
-      atTime: new Date(),
-    });
-    const dataQuality = assessDataQuality(glucoseRows, startDateValue, endDateValue);
-
-    return res.json({
-      days,
-      startDate: startDateValue,
-      endDate: endDateValue,
-      insights,
-      prediction,
-      dataQuality,
-    });
-  } catch (err) {
-    console.error('GET GLUCOSE INSIGHTS ERROR:', err);
-    return res.status(500).json({ error: err.message });
+  if (!settings) {
+    const err = new Error('Settings not found');
+    err.status = 400;
+    throw err;
   }
-};
+
+  const targetMin = Number(settings.target_min);
+  const targetMax = Number(settings.target_max);
+  const correctionRatio = Number(settings.correction_ratio);
+
+  if (!Number.isFinite(targetMin) || !Number.isFinite(targetMax)) {
+    const err = new Error(
+      'Your target range settings must be valid numbers'
+    );
+
+    err.status = 400;
+    throw err;
+  }
+
+  if (!Number.isFinite(correctionRatio) || correctionRatio <= 0) {
+    const err = new Error(
+      'Your correction ratio setting must be greater than zero'
+    );
+
+    err.status = 400;
+    throw err;
+  }
+
+  const insights = buildPatternInsights({
+    glucoseReadings: glucoseRows,
+    insulinLogs: insulinRows,
+    settings,
+    analysisDays: days,
+    endDate: endDateValue,
+  });
+
+  const prediction = buildGlucosePrediction({
+    glucoseReadings: glucoseRows,
+    insulinLogs: insulinRows,
+    settings,
+    atTime: new Date(),
+  });
+
+  const dataQuality = assessDataQuality(
+    glucoseRows,
+    startDateValue,
+    endDateValue
+  );
+
+  return res.json({
+    days,
+    startDate: startDateValue,
+    endDate: endDateValue,
+    insights,
+    prediction,
+    dataQuality,
+  });
+});
+

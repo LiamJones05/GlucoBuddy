@@ -1,5 +1,6 @@
 ﻿import { useEffect, useState } from 'react';
-import API from '../api/api';
+import { calculateDose } from '../api/services/doseService';
+import { logInsulin } from '../api/services/insulinService';
 import '../styles/dashboard.css';
 import { INSULIN_ACTION_HOURS } from '../utils/iob';
 
@@ -81,7 +82,7 @@ export default function Calculator() {
     setCalculatorSuccess('');
 
     try {
-      const res = await API.post('/dose/calculate', {
+      const res = await calculateDose({
         glucose: numericGlucose,
         carbs: numericCarbs,
         calculation_time: `${calculatorDate}T${calculatorTime}:00`,
@@ -124,15 +125,17 @@ export default function Calculator() {
     setCalculatorSuccess('');
 
     try {
-      await API.post('/insulin', {
+      await logInsulin({
         units: numericFinalDose,
-        insulin_type: 'rapid-acting',
+        insulin_type: 'rapid',
         logged_at: `${calculatorDate}T${calculatorTime}:00`,
         glucose_level: Number(calculatorGlucose),
       });
 
-      setCalculatorSuccess(
-        `Logged ${numericFinalDose} units and a ${calculatorGlucose} mmol/L reading for ${calculatorDate} at ${calculatorTime}.`
+      setCalculatorError(
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        'Unable to calculate dose.'
       );
       setDoseResult(null);
       setFinalDose('');
