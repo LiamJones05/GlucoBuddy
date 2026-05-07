@@ -1,140 +1,221 @@
 # GlucoBuddy
 
-## Introduction
-GlucoBuddy is a full-stack web application designed to assist individuals with diabetes in managing their blood glucose levels, insulin dosing, and dietary intake. The system provides users with tools to log glucose readings, track insulin usage, record meals, and calculate recommended insulin doses based on personalised settings.
+## Overview
 
-The application consists of:
-- A **React frontend** for user interaction
-- A **Node.js/Express backend** for API logic
-- A **SQL Server database** for persistent storage
+GlucoBuddy is a full-stack diabetes management application designed to help users monitor blood glucose levels, calculate insulin doses, track insulin activity, and visualise glucose trends over time.
 
----
+The application combines secure authentication, personalised diabetes configuration, insulin dose calculation logic, and interactive analytics into a responsive cross-device experience optimised for both desktop and mobile use.
 
-## Aims and Objectives
+The platform was developed as a final year Computer Science project and demonstrates practical implementation of:
 
-### Aim
-To design and develop a comprehensive diabetes management system that supports accurate insulin dose calculations and effective data tracking.
-
-### Objectives
-- Implement secure user authentication using JWT
-- Store and manage user-specific medical settings
-- Enable logging of:
-  - Blood glucose levels
-  - Insulin doses
-  - Meals (carbohydrates and protein)
-- Develop an insulin dose calculator based on:
-  - Blood glucose levels
-  - Carbohydrate intake
-  - User-specific insulin-to-carb ratios
-  - Correction factors
-  - Insulin-on-board (IOB)
-- Visualise health data for improved decision-making
+- Full-stack web development
+- REST API architecture
+- Secure authentication
+- SQL database integration
+- Data visualisation
+- Mobile-responsive UI design
+- Progressive Web App (PWA) concepts
 
 ---
 
-## Key Features
+# Key Features
 
-- User authentication (register/login)
-- Personalised diabetes settings
-- Glucose tracking
-- Insulin logging
-- Meal tracking
-- Intelligent insulin dose calculator
-- Data visualisation (planned)
+## Authentication & Security
+
+- JWT-based authentication
+- Secure password hashing using bcrypt
+- Protected API routes
+- Persistent authenticated sessions
+- User-specific medical configuration storage
 
 ---
 
-## Technology Stack
+## Glucose Management
 
-### Frontend
-- React (Vite)
+- Log blood glucose readings
+- Record custom reading dates and times
+- Visualise glucose readings on interactive charts
+- Daily glucose trend analysis
+- Configurable target glucose ranges
+- Time-of-day glucose averaging
+
+---
+
+## Insulin Tracking
+
+- Log insulin doses
+- Track insulin activity over time
+- Insulin-on-board (IOB) modelling
+- Overlay insulin activity directly onto glucose charts
+
+---
+
+## Intelligent Dose Calculator
+
+The application calculates recommended insulin doses using:
+
+- Current blood glucose
+- Carbohydrate intake
+- Protein intake adjustments
+- User-specific insulin-to-carb ratios
+- Correction factors
+- Insulin-on-board subtraction
+- Exercise adjustments
+- Safety validations for hypoglycaemia risk
+
+### Dose Formula
+
+```text
+Total Dose = Carb Dose + Protein Dose + Fat Dose + Correction Dose 
+- Insulin On Board (IOB) - Exercise Dose
+```
+
+### Calculation Components
+
+- Carb Dose = Carbohydrates ÷ Carb Ratio
+- Protein Dose = Protein
+- Correction Dose = (Current Glucose - Target Mid-Range) ÷ Correction Factor
+- IOB = Remaining active insulin from previous doses
+
+---
+
+# Analytics & Reporting
+
+- Interactive glucose trend visualisations
+- Average glucose by time of day
+- Insulin activity graphs
+- Clinical insight summaries
+- Time-window filtering
+- PDF clinical report generation
+
+---
+
+# Mobile Experience
+
+GlucoBuddy includes a mobile-first responsive interface with:
+
+- Fixed bottom navigation
+- iOS-style UI behaviour
+- Dark mode support
+- Responsive chart rendering
+- Touch-friendly controls
+- Safe-area support for iPhone devices
+
+---
+
+# Technology Stack
+
+## Frontend
+
+- React
+- Vite
 - React Router
+- Recharts
+- Lucide React
 
-### Backend
+## Backend
+
 - Node.js
 - Express.js
 - JWT Authentication
-- bcrypt (password hashing)
+- bcrypt
 
-### Database
+## Database
+
 - Microsoft SQL Server
+
+## Tooling & Infrastructure
+
+- Docker
+- ngrok
+- PowerShell automation scripts
 
 ---
 
-## System Architecture
+# System Architecture
 
-```
-Frontend (React)
-      ↓
-Backend API (Express)
-      ↓
+```text
+React Frontend
+       ↓
+Express API Backend
+       ↓
 SQL Server Database
 ```
 
 ---
 
-## Database Overview
+# Database Structure
 
-Main tables:
+Main database tables include:
+
 - Users
 - UserSettings
 - GlucoseLogs
 - InsulinLogs
-- MealLogs
 - DoseCalculations
 - InsulinActivity
 
 ---
 
-## Insulin Dose Calculation Logic
+# Project Structure
 
-The system calculates insulin dosage using:
-
-```
-Total Dose = Carb Dose + Correction Dose - Insulin On Board (IOB)
-```
-
-### Components:
-- **Carb Dose** = Carbohydrates / Insulin-to-carb ratio
-- **Correction Dose** = (Current glucose - target max) / correction factor
-- **IOB** = Remaining active insulin from previous doses
-
-Safety constraints:
-- No negative doses
-- Optional rounding to nearest 0.5 units
-
----
-
-## Setup Instructions
-
-### 1. Clone the repository
-```
-git clone <your-repo-url>
+```text
+glucobuddy/
+│
+├── glucobuddy-frontend/
+│   ├── src/
+│   ├── public/
+│   └── vite.config.js
+│
+├── glucobuddy-backend/
+│   ├── routes/
+│   ├── controllers/
+│   ├── middleware/
+│   ├── models/
+│   └── server.js
+│
+└── scripts/
 ```
 
 ---
 
-### 2. Backend Setup
+# Setup Instructions
+
+## 1. Clone the Repository
+
+```bash
+git clone <repository-url>
+cd glucobuddy
 ```
+
+---
+
+## 2. Backend Setup
+
+```bash
 cd glucobuddy-backend
 npm install
 npm run dev
 ```
 
-Create a `.env` file:
-```
+Create a `.env` file inside the backend directory:
+
+```env
 DB_USER=your_user
 DB_PASSWORD=your_password
 DB_SERVER=localhost
 DB_DATABASE=GlucoBuddyData
 DB_PORT=1433
+
 JWT_SECRET=your_secret
+JWT_EXPIRES_IN=1d
 ```
 
 ---
 
-### 3. Frontend Setup
-```
+## 3. Frontend Setup
+
+```bash
 cd glucobuddy-frontend
 npm install
 npm run dev
@@ -142,31 +223,123 @@ npm run dev
 
 ---
 
-### 4. Access the App
+## 4. Run SQL Server
+
+The project uses Microsoft SQL Server running locally or via Docker.
+
+Example Docker container:
+
+```bash
+docker run -e "ACCEPT_EULA=Y" ^
+-e "SA_PASSWORD=YourStrongPassword123!" ^
+-p 1433:1433 ^
+--name sqlserver-dev ^
+-d mcr.microsoft.com/mssql/server:2022-latest
 ```
+
+---
+
+## 5. Access the Application
+
+```text
 Frontend: http://localhost:5173
-Backend: http://localhost:3000
+Backend:  http://localhost:3000
 ```
 
 ---
 
-## Future Improvements
+# Development Workflow
 
-- Advanced insulin-on-board modelling
-- Graph visualisation (glucose & insulin trends)
-- Mobile responsiveness
-- Notifications and alerts
-- Integration with wearable devices
+## Frontend Development
+
+```bash
+npm run dev
+```
+
+## Production Build
+
+```bash
+npm run build
+```
+
+## Preview Production Build
+
+```bash
+npm run preview
+```
 
 ---
 
-## Conclusion
+# PWA Support
 
-GlucoBuddy provides a structured and extensible platform for diabetes management, combining data tracking with intelligent insulin calculation. The system demonstrates full-stack development principles and real-world application of database design, API development, and frontend engineering.
+The frontend includes Progressive Web App functionality with:
+
+- Installable mobile experience
+- Service worker caching
+- Offline-ready architecture foundations
+- Web manifest configuration
 
 ---
 
-## Author
-Liam Jones
+# Current Features Implemented
 
-3rd Year Computer Science Student
+- User registration & login
+- JWT authentication
+- User diabetes settings
+- Glucose logging
+- Insulin logging
+- Insulin dose calculation
+- Glucose trend charts
+- Insulin-on-board modelling
+- Dark mode
+- Mobile responsive layout
+- Clinical report generation
+
+---
+
+# Planned Future Improvements
+
+- Continuous Glucose Monitor (CGM) integration
+- Push notifications and alerts
+- Apple Health / Google Fit integration
+- Advanced prediction modelling
+- AI-assisted glucose trend analysis
+- Multi-user clinician dashboard
+- Cloud deployment infrastructure
+
+---
+
+# Screenshots
+
+Suggested screenshots to include:
+
+- Login screen
+- Dashboard overview
+- Glucose logging page
+- Analytics graphs
+- Mobile navigation
+- Dark mode interface
+
+---
+
+# Security Considerations
+
+- Passwords are hashed using bcrypt
+- JWT authentication is required for protected endpoints
+- Sensitive data is stored server-side
+- Input validation is implemented across API routes
+- User data isolation is enforced per authenticated account
+
+---
+
+# Author
+
+Liam Jones  
+BSc Computer Science Student  
+University of Plymouth
+
+---
+
+# License
+
+This project was developed for educational purposes as part of a university dissertation/project submission.
