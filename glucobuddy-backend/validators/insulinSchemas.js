@@ -3,15 +3,13 @@ const { z } = require('zod');
 const createInsulinSchema = z.object({
   units: z.coerce
     .number()
-    .positive('units must be greater than 0')
+    .min(0, 'units must be 0 or greater')
     .max(50, 'units must not exceed 50'),
 
   insulin_type: z
   .string()
   .transform((value) => value?.toLowerCase().trim())
-  .pipe(
-    z.enum(['rapid', 'long']).catch('rapid')
-  ),
+  .pipe(z.enum(['rapid', 'long']).catch('rapid')),
 
   logged_at: z
     .string()

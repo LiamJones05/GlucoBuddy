@@ -20,6 +20,18 @@ export default function Navbar() {
   }, [theme]);
 
   useEffect(() => {
+  const syncTheme = () => {
+    setTheme(localStorage.getItem('theme') || 'light');
+  };
+
+  window.addEventListener('themechange', syncTheme);
+
+  return () => {
+    window.removeEventListener('themechange', syncTheme);
+  };
+}, []);
+
+  useEffect(() => {
     let isMounted = true;
 
     const fetchUser = async () => {
@@ -39,7 +51,6 @@ export default function Navbar() {
         }
       }
     };
-
 
     fetchUser();
 
@@ -65,7 +76,8 @@ export default function Navbar() {
         <span className="navbar__user">{userName}</span>
       </div>
 
-      <div className="navbar__controls">
+      <nav className="navbar__links" aria-label="Primary">
+
         <button
           className="navbar__theme"
           onClick={() => setTheme(prev => (prev === 'dark' ? 'light' : 'dark'))}
@@ -73,9 +85,7 @@ export default function Navbar() {
         >
           {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
         </button>
-      </div>
 
-      <nav className="navbar__links" aria-label="Primary">
         <NavLink to="/log-glucose" className={getLinkClass}>Log</NavLink>
         <NavLink to="/calculator" className={getLinkClass}>Calculator</NavLink>
         <NavLink to="/analytics" className={getLinkClass}>Analytics</NavLink>

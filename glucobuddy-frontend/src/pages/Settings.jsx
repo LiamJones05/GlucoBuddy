@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { getSettings, updateSettings } from '../api/services/settingsService';
 import { exportData, previewImport, importData } from '../api/services/dataService';
 import '../styles/settings.css';
+import '../styles/adaptive.css';
+import AdaptiveSettings from '../components/AdaptiveSettings';
+
 
 export default function Settings() {
   const [settings, setSettings] = useState({});
@@ -183,6 +186,8 @@ const confirmImport = async () => {
         </div>
 
         <button onClick={update}>Save</button>
+
+        <AdaptiveSettings />
 
         {/* ---------------- BACKUP & RESTORE ---------------- */}
         <div className="export-card">

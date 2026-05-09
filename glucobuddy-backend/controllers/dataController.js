@@ -316,13 +316,15 @@ exports.importUserData = asyncHandler(async (req, res) => {
             user_id,
             glucose_input,
             carbs_input,
-            recommended_dose
+            recommended_dose,
+            confirmed_administered
           )
           VALUES (
             @user_id,
             @glucose,
             @carbs,
-            @dose
+            @dose,
+            0
           )
         `);
     }

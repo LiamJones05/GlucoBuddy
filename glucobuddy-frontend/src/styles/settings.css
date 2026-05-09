@@ -8,11 +8,17 @@
 /* Main container */
 .settings {
   padding: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .settings-title {
   font-size: 1.5rem;
   margin-bottom: 1.5rem;
+
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 /* Layout wrapper for sections */
@@ -81,6 +87,14 @@
   cursor: pointer;
   font-size: 0.95rem;
   transition: all 0.2s var(--ease-ios);
+}
+.settings > button {
+  display: block;
+
+  width: 100%;
+  max-width: 600px;
+
+  margin: 0 auto 1.5rem auto;
 }
 
 .settings button:hover {
@@ -252,9 +266,14 @@
 .export-card {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
+
+  width: 100%;
+  max-width: 600px;
+
   padding: 1rem;
   border-radius: 16px;
-  margin-top: 1.25rem;
+
+  margin: 1.25rem auto 0 auto;
 }
 
 .export-card h3 {
@@ -338,4 +357,11 @@
   transition:
     transform 0.2s var(--ease-ios),
     box-shadow 0.25s var(--ease-ios);
+}
+
+.settings-card,
+.export-card,
+.adaptive-settings {
+  margin-left: auto;
+  margin-right: auto;
 }

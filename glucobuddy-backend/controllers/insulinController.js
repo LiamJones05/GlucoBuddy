@@ -101,6 +101,21 @@ exports.createInsulin = asyncHandler(async (req, res) => {
 
       await insulinRequest.query(insulinInsertQuery);
 
+      await new sql.Request(transaction)
+        .input('user_id', sql.Int, req.user.id)
+        .query(`
+          UPDATE DoseCalculations
+          SET confirmed_administered = 1
+          WHERE id = (
+            SELECT TOP 1 id
+            FROM DoseCalculations
+            WHERE user_id = @user_id
+              AND confirmed_administered = 0
+              AND created_at >= DATEADD(minute, -20, GETDATE())
+            ORDER BY created_at DESC
+          )
+        `);
+
       if (glucose_level !== null) {
         await new sql.Request(transaction)
           .input('user_id', sql.Int, req.user.id)

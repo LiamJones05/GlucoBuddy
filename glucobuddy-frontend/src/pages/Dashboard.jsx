@@ -7,6 +7,7 @@ import GlucoseAverageChart from '../components/GlucoseAverageChart';
 import InsightList from '../components/InsightList';
 import { createReportChartImageDataUrl } from '../utils/reportChart';
 import { downloadReportPdf } from '../utils/reportPdf';
+import OutcomePromptCard from '../components/OutcomePromptCard';
 
 const AVERAGE_WINDOWS = [14, 30, 90];
 const INSIGHT_WINDOW = 30;
@@ -187,12 +188,13 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard">
+       <OutcomePromptCard onOutcomeSubmitted={() => fetchAverageData(averageWindow)} />
       <h1 className="dashboard-title">Analytics</h1>
 
-      {/* 🔥 DATA QUALITY BANNER */}
+      {/* DATA QUALITY BANNER */}
       {dataQuality?.warnings?.length ? (
         <div className="data-warning">
-          ⚠️ {dataQuality.warnings[0]}
+          {dataQuality.warnings[0]}
         </div>
       ) : null}
 
