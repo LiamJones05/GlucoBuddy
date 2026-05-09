@@ -78,6 +78,10 @@ exports.calculateDose = asyncHandler(async (req, res) => {
     throw err;
   }
 
+  const adaptiveParams = settings.adaptive_enabled && settings.adaptive_params
+    ? JSON.parse(settings.adaptive_params)
+    : null;
+
   // 🟢 TIME HANDLING
   const calculationTimeText = body.calculation_time
     ? normaliseDateTime(body.calculation_time)
@@ -121,6 +125,7 @@ exports.calculateDose = asyncHandler(async (req, res) => {
       settings,
       insulinLogs: insulinResult.recordset,
       calculationTime,
+      adaptiveParams,
     });
   } catch (err) {
     err.status = 400;
@@ -139,13 +144,15 @@ exports.calculateDose = asyncHandler(async (req, res) => {
         user_id,
         glucose_input,
         carbs_input,
-        recommended_dose
+        recommended_dose,
+        confirmed_administered
       )
       VALUES (
         @user_id,
         @glucose,
         @carbs,
-        @dose
+        @dose,
+        0
       )
     `);
 

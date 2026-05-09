@@ -36,6 +36,7 @@ export default function Calculator() {
   const [calculatorAlcohol, setCalculatorAlcohol] = useState('');
   const [calculatorRecentExercise, setCalculatorRecentExercise] = useState('');
   const [calculatorPlannedExercise, setCalculatorPlannedExercise] = useState('');
+  const [cgmTrend, setCgmTrend] = useState(null);
 
   useEffect(() => {
     if (!doseResult) {
@@ -56,6 +57,7 @@ export default function Calculator() {
     calculatorAlcohol,
     calculatorRecentExercise,
     calculatorPlannedExercise,
+    cgmTrend,
   ]);
 
   const handleCalculateDose = async () => {
@@ -95,6 +97,17 @@ export default function Calculator() {
 
       setDoseResult(res.data);
       setFinalDose(String(res.data.recommendedDose));
+       const trendMultipliers = {
+        '↑':  1.20,
+        '↗':  1.10,
+        '→':  1.00,
+        '↘':  0.90,
+        '↓':  0.80,
+      };
+      const multiplier = cgmTrend ? trendMultipliers[cgmTrend] : 1.00;
+      const adjustedDose = Math.round(res.data.recommendedDose * multiplier * 2) / 2;
+      setDoseResult({ ...res.data, recommendedDose: adjustedDose, cgmTrend, cgmMultiplier: multiplier });
+      setFinalDose(String(adjustedDose));
       setCalculatorWarning(res.data.warning || null);
     } catch (err) {
       console.error('Error calculating dose:', err);
@@ -115,8 +128,8 @@ export default function Calculator() {
       return;
     }
 
-    if (!Number.isFinite(numericFinalDose) || numericFinalDose <= 0) {
-      setCalculatorError('Enter a final dose greater than zero before logging.');
+    if (!Number.isFinite(numericFinalDose) || numericFinalDose < 0) {
+      setCalculatorError('Enter a valid final dose before logging.');
       return;
     }
 
@@ -220,6 +233,29 @@ export default function Calculator() {
                 value={calculatorGlucose}
                 onChange={(e) => setCalculatorGlucose(e.target.value)}
               />
+            </label>
+
+            <label>
+              CGM trend
+              <div className="cgm-trend-selector">
+                {['↑', '↗', '→', '↘', '↓'].map((arrow) => (
+                  <button
+                    key={arrow}
+                    type="button"
+                    className={`cgm-trend-btn${cgmTrend === arrow ? ' cgm-trend-btn--active' : ''}`}
+                    onClick={() => setCgmTrend(cgmTrend === arrow ? null : arrow)}
+                    title={{
+                      '↑': 'Rising fast (+20%)',
+                      '↗': 'Rising slowly (+10%)',
+                      '→': 'Steady (no adjustment)',
+                      '↘': 'Falling slowly (-10%)',
+                      '↓': 'Falling fast (-20%)',
+                    }[arrow]}
+                  >
+                    {arrow}
+                  </button>
+                ))}
+              </div>
             </label>
 
             <label>
@@ -377,7 +413,13 @@ export default function Calculator() {
                 <p>Carb coverage: {carbDose.toFixed(2)} units</p>
                 <p>Correction before IOB: {correctionDose.toFixed(2)} units</p>
                 <p>Time sensitivity multiplier: {toSafeNumber(breakdown.sensitivityMultiplier, 1).toFixed(2)}</p>
-
+                {doseResult.cgmTrend && doseResult.cgmMultiplier !== 1 ? (
+                  <p>
+                    CGM trend ({doseResult.cgmTrend}) adjustment:{' '}
+                    {doseResult.cgmMultiplier > 1 ? '+' : ''}
+                    {((doseResult.cgmMultiplier - 1) * 100).toFixed(0)}%
+                  </p>
+                ) : null}
                 {proteinDose > 0 ? <p>Protein adjustment: +{proteinDose.toFixed(2)} units</p> : null}
                 {fatDose > 0 ? <p>Fat adjustment: +{fatDose.toFixed(2)} units</p> : null}
                 {alcoholReduction > 0 ? <p>Alcohol reduction: -{alcoholReduction.toFixed(2)} units</p> : null}

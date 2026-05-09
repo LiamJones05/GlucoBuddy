@@ -1,4 +1,25 @@
-﻿const { INSULIN_ACTION_HOURS, calculateInsulinOnBoard } = require('./iobEngine');
+/**
+ * doseEngine.js
+ *
+ * Core dose calculation engine.
+ *
+ * Adaptive changes (Phase 1):
+ *  - calculateDoseRecommendation now accepts an optional `adaptiveParams`
+ *    argument. When provided and adaptive mode is active, carb ratios and
+ *    the correction factor are sourced from the adaptive engine rather than
+ *    raw user settings.
+ *  - getCarbRatioForTime remains unchanged for backward compatibility.
+ *  - A new `adaptiveActive` flag is included in the response breakdown so
+ *    the frontend can display the adaptive badge accurately.
+ *
+ * All other logic is untouched.
+ */
+
+const { INSULIN_ACTION_HOURS, calculateInsulinOnBoard } = require('./iobEngine');
+const {
+  getAdaptiveCarbRatio,
+  getAdaptiveCorrectionFactor,
+} = require('./adaptiveEngine');
 
 const PROTEIN_CARB_EQUIVALENT_FACTOR = 0.12;
 const FAT_CARB_EQUIVALENT_FACTOR = 0.08;
@@ -16,6 +37,7 @@ function roundToTwoDecimals(value) {
   return Number(value.toFixed(2));
 }
 
+// Unchanged — kept for backward compatibility and direct use in doseMath.js
 function getCarbRatioForTime(settings, calculationTime) {
   const hour = calculationTime.getHours();
 
@@ -105,9 +127,32 @@ function calculateAdvancedAdjustments({
   };
 }
 
-function calculateDoseRecommendation({ inputs, settings, insulinLogs, calculationTime }) {
-  const carbRatio = getCarbRatioForTime(settings, calculationTime);
-  const correctionRatio = Number(settings.correction_ratio);
+/**
+ * calculateDoseRecommendation
+ *
+ * @param {object} options
+ * @param {object} options.inputs           - user inputs from the calculator form
+ * @param {object} options.settings         - UserSettings row
+ * @param {Array}  options.insulinLogs      - recent insulin logs for IOB calculation
+ * @param {Date}   options.calculationTime  - time of calculation
+ * @param {object|null} [options.adaptiveParams] - parsed adaptive params, or null
+ */
+function calculateDoseRecommendation({
+  inputs,
+  settings,
+  insulinLogs,
+  calculationTime,
+  adaptiveParams = null,
+}) {
+  // ── Adaptive-aware parameter resolution ───────────────────────────────────
+  // When adaptiveParams is provided, these functions return the learned value.
+  // When null, they fall back to the raw settings — identical to original behaviour.
+  const carbRatio = getAdaptiveCarbRatio(settings, calculationTime, adaptiveParams);
+  const correctionRatio = getAdaptiveCorrectionFactor(settings, adaptiveParams);
+
+  const adaptiveActive = adaptiveParams !== null;
+
+  // ── Remaining logic is unchanged from original ────────────────────────────
   const targetMin = Number(settings.target_min);
   const targetMax = Number(settings.target_max);
   const targetGlucose = (targetMin + targetMax) / 2;
@@ -164,6 +209,10 @@ function calculateDoseRecommendation({ inputs, settings, insulinLogs, calculatio
       iobApplied: roundToTwoDecimals(iobApplied),
       iob: roundToTwoDecimals(iob),
       advanced: advancedAdjustments,
+      // Adaptive metadata — used by frontend for badge display
+      adaptiveActive,
+      adaptiveCarbRatio: adaptiveActive ? roundToTwoDecimals(carbRatio) : null,
+      adaptiveCorrectionFactor: adaptiveActive ? roundToTwoDecimals(correctionRatio) : null,
     },
     carbRatio: roundToTwoDecimals(carbRatio),
     insulinActionHours: INSULIN_ACTION_HOURS,
