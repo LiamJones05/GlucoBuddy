@@ -1,15 +1,4 @@
-/**
- * adaptiveController.js
- *
- * Handles all HTTP requests related to the adaptive engine:
- *  - GET  /adaptive/params   → current adaptive parameters + status
- *  - GET  /adaptive/pending  → whether a pending outcome prompt should show
- *  - POST /adaptive/outcome  → submit a post-meal glucose outcome
- *  - POST /adaptive/toggle   → enable or disable adaptive mode
- *  - POST /adaptive/reset    → reset adaptive params back to baseline
- */
-
-const { pool, poolConnect, sql } = require('../db');
+const { pool } = require('../db');
 const asyncHandler = require('../utils/asyncHandler');
 const {
   parseAdaptiveParams,
@@ -17,35 +6,24 @@ const {
   isHypoFrozen,
   MIN_OUTCOMES_FOR_ADAPTATION,
 } = require('../services/adaptiveEngine');
-const {
-  checkPendingOutcome,
-  recordOutcome,
-} = require('../services/outcomeTracker');
+const { checkPendingOutcome, recordOutcome } = require('../services/outcomeTracker');
 
-// ─── GET /adaptive/params ─────────────────────────────────────────────────────
-
-/**
- * Returns the user's current adaptive parameters and status summary.
- * Used by the frontend to display the adaptive badge and settings panel.
- */
+// ── GET /adaptive/params ──────────────────────────────────────────────────────
 exports.getAdaptiveParams = asyncHandler(async (req, res) => {
-  await poolConnect;
+  const result = await pool.query(
+    `SELECT
+       adaptive_enabled,
+       adaptive_params,
+       carb_ratio_morning,
+       carb_ratio_afternoon,
+       carb_ratio_evening,
+       correction_ratio
+     FROM user_settings
+     WHERE user_id = $1`,
+    [req.user.id]
+  );
 
-  const result = await pool.request()
-    .input('user_id', sql.Int, req.user.id)
-    .query(`
-      SELECT
-        adaptive_enabled,
-        adaptive_params,
-        carb_ratio_morning,
-        carb_ratio_afternoon,
-        carb_ratio_evening,
-        correction_ratio
-      FROM UserSettings
-      WHERE user_id = @user_id
-    `);
-
-  const settings = result.recordset[0];
+  const settings = result.rows[0];
 
   if (!settings) {
     const err = new Error('Settings not found');
@@ -56,95 +34,61 @@ exports.getAdaptiveParams = asyncHandler(async (req, res) => {
   const params = parseAdaptiveParams(settings.adaptive_params, settings);
   const frozen = isHypoFrozen(params);
 
-  // Calculate minimum outcomes across all bands for overall readiness
   const minOutcomes = Math.min(
-    params.outcomeCount?.morning ?? 0,
-    params.outcomeCount?.afternoon ?? 0,
-    params.outcomeCount?.evening ?? 0
+    params.outcomeCount?.morning    ?? 0,
+    params.outcomeCount?.afternoon  ?? 0,
+    params.outcomeCount?.evening    ?? 0
   );
 
   return res.json({
     adaptiveEnabled: Boolean(settings.adaptive_enabled),
     frozen,
-    hypoFreeze: params.hypoFreeze ?? null,
-    ready: minOutcomes >= MIN_OUTCOMES_FOR_ADAPTATION,
-    outcomeCount: params.outcomeCount,
-    minOutcomesRequired: MIN_OUTCOMES_FOR_ADAPTATION,
+    hypoFreeze:            params.hypoFreeze ?? null,
+    ready:                 minOutcomes >= MIN_OUTCOMES_FOR_ADAPTATION,
+    outcomeCount:          params.outcomeCount,
+    minOutcomesRequired:   MIN_OUTCOMES_FOR_ADAPTATION,
     baseline: {
       carbRatios: {
-        morning: Number(settings.carb_ratio_morning),
+        morning:   Number(settings.carb_ratio_morning),
         afternoon: Number(settings.carb_ratio_afternoon),
-        evening: Number(settings.carb_ratio_evening),
+        evening:   Number(settings.carb_ratio_evening),
       },
       correctionFactor: Number(settings.correction_ratio),
     },
     adapted: {
-      carbRatios: params.carbRatios,
+      carbRatios:       params.carbRatios,
       correctionFactor: params.correctionFactor,
     },
     lastUpdated: params.lastUpdated ?? null,
   });
 });
 
-// ─── GET /adaptive/pending ────────────────────────────────────────────────────
-
-/**
- * Checks whether there is a dose calculation awaiting an outcome reading.
- * The frontend polls this to decide whether to show the outcome prompt card.
- */
+// ── GET /adaptive/pending ─────────────────────────────────────────────────────
 exports.getPendingOutcome = asyncHandler(async (req, res) => {
   const result = await checkPendingOutcome(req.user.id);
   return res.json(result);
 });
 
-// ─── POST /adaptive/outcome ───────────────────────────────────────────────────
-
-/**
- * Submit a post-meal glucose outcome for a specific dose calculation.
- *
- * Body: { doseId: number, outcomeGlucose: number }
- */
+// ── POST /adaptive/outcome ────────────────────────────────────────────────────
 exports.submitOutcome = asyncHandler(async (req, res) => {
   const { doseId, outcomeGlucose } = req.validatedBody;
-
-  const result = await recordOutcome({
-    userId: req.user.id,
-    doseId,
-    outcomeGlucose,
-  });
-
+  const result = await recordOutcome({ userId: req.user.id, doseId, outcomeGlucose });
   return res.json(result);
 });
 
-// ─── POST /adaptive/toggle ────────────────────────────────────────────────────
-
-/**
- * Enable or disable adaptive mode.
- * When enabling for the first time, seeds adaptive_params from current settings.
- *
- * Body: { enabled: boolean }
- */
+// ── POST /adaptive/toggle ─────────────────────────────────────────────────────
 exports.toggleAdaptive = asyncHandler(async (req, res) => {
   const { enabled } = req.validatedBody;
 
-  await poolConnect;
+  const settingsResult = await pool.query(
+    `SELECT adaptive_params, adaptive_enabled,
+            carb_ratio_morning, carb_ratio_afternoon, carb_ratio_evening, correction_ratio
+     FROM user_settings
+     WHERE user_id = $1`,
+    [req.user.id]
+  );
 
-  // Fetch current settings
-  const settingsResult = await pool.request()
-    .input('user_id', sql.Int, req.user.id)
-    .query(`
-      SELECT
-        adaptive_params,
-        adaptive_enabled,
-        carb_ratio_morning,
-        carb_ratio_afternoon,
-        carb_ratio_evening,
-        correction_ratio
-      FROM UserSettings
-      WHERE user_id = @user_id
-    `);
-
-  const settings = settingsResult.recordset[0];
+  const settings = settingsResult.rows[0];
 
   if (!settings) {
     const err = new Error('Settings not found');
@@ -154,53 +98,33 @@ exports.toggleAdaptive = asyncHandler(async (req, res) => {
 
   let paramsJson = settings.adaptive_params;
 
-  // If enabling and no params exist yet, seed defaults from current settings
   if (enabled && !paramsJson) {
-    const defaults = buildDefaultParams(settings);
-    paramsJson = JSON.stringify(defaults);
+    paramsJson = JSON.stringify(buildDefaultParams(settings));
   }
 
-  await pool.request()
-    .input('user_id', sql.Int, req.user.id)
-    .input('adaptive_enabled', sql.Bit, enabled ? 1 : 0)
-    .input('adaptive_params', sql.NVarChar(sql.MAX), paramsJson)
-    .query(`
-      UPDATE UserSettings
-      SET
-        adaptive_enabled = @adaptive_enabled,
-        adaptive_params = @adaptive_params
-      WHERE user_id = @user_id
-    `);
+  await pool.query(
+    `UPDATE user_settings
+     SET adaptive_enabled = $1, adaptive_params = $2
+     WHERE user_id = $3`,
+    [enabled, paramsJson, req.user.id]
+  );
 
   return res.json({
-    message: enabled ? 'Adaptive mode enabled' : 'Adaptive mode disabled',
+    message:         enabled ? 'Adaptive mode enabled' : 'Adaptive mode disabled',
     adaptiveEnabled: enabled,
   });
 });
 
-// ─── POST /adaptive/reset ─────────────────────────────────────────────────────
-
-/**
- * Reset adaptive parameters back to the user's current manual baseline.
- * Clears all learned adjustments and outcome counts.
- * Adaptive mode remains enabled.
- */
+// ── POST /adaptive/reset ──────────────────────────────────────────────────────
 exports.resetAdaptiveParams = asyncHandler(async (req, res) => {
-  await poolConnect;
+  const settingsResult = await pool.query(
+    `SELECT carb_ratio_morning, carb_ratio_afternoon, carb_ratio_evening, correction_ratio
+     FROM user_settings
+     WHERE user_id = $1`,
+    [req.user.id]
+  );
 
-  const settingsResult = await pool.request()
-    .input('user_id', sql.Int, req.user.id)
-    .query(`
-      SELECT
-        carb_ratio_morning,
-        carb_ratio_afternoon,
-        carb_ratio_evening,
-        correction_ratio
-      FROM UserSettings
-      WHERE user_id = @user_id
-    `);
-
-  const settings = settingsResult.recordset[0];
+  const settings = settingsResult.rows[0];
 
   if (!settings) {
     const err = new Error('Settings not found');
@@ -210,17 +134,10 @@ exports.resetAdaptiveParams = asyncHandler(async (req, res) => {
 
   const freshParams = buildDefaultParams(settings);
 
-  await pool.request()
-    .input('user_id', sql.Int, req.user.id)
-    .input('adaptive_params', sql.NVarChar(sql.MAX), JSON.stringify(freshParams))
-    .query(`
-      UPDATE UserSettings
-      SET adaptive_params = @adaptive_params
-      WHERE user_id = @user_id
-    `);
+  await pool.query(
+    `UPDATE user_settings SET adaptive_params = $1 WHERE user_id = $2`,
+    [JSON.stringify(freshParams), req.user.id]
+  );
 
-  return res.json({
-    message: 'Adaptive parameters reset to baseline',
-    params: freshParams,
-  });
+  return res.json({ message: 'Adaptive parameters reset to baseline', params: freshParams });
 });

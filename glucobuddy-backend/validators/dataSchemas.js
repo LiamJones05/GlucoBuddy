@@ -19,7 +19,7 @@ const glucoseLogSchema = z.object({
 const insulinLogSchema = z.object({
   units: z.coerce
     .number()
-    .positive()
+    .min(0)
     .max(50),
 
   insulin_type: z.enum(['rapid', 'long']),

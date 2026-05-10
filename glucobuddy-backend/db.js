@@ -1,10 +1,10 @@
 require('dotenv').config();
-const sql = require('mssql');
+const { Pool } = require('pg');
 
 const requiredEnvVars = [
   'DB_USER',
   'DB_PASSWORD',
-  'DB_SERVER',
+  'DB_HOST',
   'DB_DATABASE',
   'DB_PORT',
 ];
@@ -15,27 +15,22 @@ if (missingEnvVars.length > 0) {
   throw new Error(`Missing database configuration in .env: ${missingEnvVars.join(', ')}`);
 }
 
-const config = {
-  user: process.env.DB_USER,
+const pool = new Pool({
+  user:     process.env.DB_USER,
   password: process.env.DB_PASSWORD,
-  server: process.env.DB_SERVER,
+  host:     process.env.DB_HOST,
   database: process.env.DB_DATABASE,
-  port: Number.parseInt(process.env.DB_PORT, 10),
-  options: {
-    encrypt: false,
-    trustServerCertificate: true,
-  },
-};
-
-const pool = new sql.ConnectionPool(config);
-const poolConnect = pool.connect();
-
-poolConnect.catch((error) => {
-  console.error('Database connection failed:', error);
+  port:     Number.parseInt(process.env.DB_PORT, 10),
+  ssl:      process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
 });
 
-module.exports = {
-  sql,
-  pool,
-  poolConnect,
-};
+pool.on('error', (err) => {
+  console.error('Unexpected database error:', err);
+});
+
+// Verify connection on startup
+pool.query('SELECT 1').catch((err) => {
+  console.error('Database connection failed:', err);
+});
+
+module.exports = { pool };

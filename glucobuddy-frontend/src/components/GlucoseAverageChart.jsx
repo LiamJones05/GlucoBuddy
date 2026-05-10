@@ -13,16 +13,18 @@
 const isMobile = window.innerWidth < 768;
 
 function getYDomain(data, targetMin, targetMax) {
+  const numericTargetMin = Number(targetMin);
+  const numericTargetMax = Number(targetMax);
   const values = data
-    .map((entry) => entry.averageGlucose)
+    .map((entry) => Number(entry.averageGlucose))
     .filter((value) => Number.isFinite(value));
 
-  if (Number.isFinite(targetMin)) {
-    values.push(targetMin);
+  if (Number.isFinite(numericTargetMin)) {
+    values.push(numericTargetMin);
   }
 
-  if (Number.isFinite(targetMax)) {
-    values.push(targetMax);
+  if (Number.isFinite(numericTargetMax)) {
+    values.push(numericTargetMax);
   }
 
   if (values.length === 0) {
@@ -39,16 +41,32 @@ function getYDomain(data, targetMin, targetMax) {
   ];
 }
 
-function getBarColor(value, targetMin, targetMax) {
+function getBarColor(entry, targetMin, targetMax) {
+  if (entry.status === 'below-range') {
+    return '#ef4444';
+  }
+
+  if (entry.status === 'above-range') {
+    return '#f59e0b';
+  }
+
+  if (entry.status === 'in-range') {
+    return '#0f766e';
+  }
+
+  const value = Number(entry.averageGlucose);
+  const numericTargetMin = Number(targetMin);
+  const numericTargetMax = Number(targetMax);
+
   if (!Number.isFinite(value)) {
     return '#cbd5e1';
   }
 
-  if (Number.isFinite(targetMin) && value < targetMin) {
+  if (Number.isFinite(numericTargetMin) && value < numericTargetMin) {
     return '#ef4444';
   }
 
-  if (Number.isFinite(targetMax) && value > targetMax) {
+  if (Number.isFinite(numericTargetMax) && value > numericTargetMax) {
     return '#f59e0b';
   }
 
@@ -56,12 +74,14 @@ function getBarColor(value, targetMin, targetMax) {
 }
 
 export default function GlucoseAverageChart({ data, days, targetMin, targetMax }) {
+  const numericTargetMin = Number(targetMin);
+  const numericTargetMax = Number(targetMax);
   const hasTargetRange =
-    Number.isFinite(targetMin) &&
-    Number.isFinite(targetMax) &&
-    targetMin < targetMax;
-  const hasAverageData = data.some((entry) => Number.isFinite(entry.averageGlucose));
-  const yDomain = getYDomain(data, targetMin, targetMax);
+    Number.isFinite(numericTargetMin) &&
+    Number.isFinite(numericTargetMax) &&
+    numericTargetMin < numericTargetMax;
+  const hasAverageData = data.some((entry) => Number.isFinite(Number(entry.averageGlucose)));
+  const yDomain = getYDomain(data, numericTargetMin, numericTargetMax);
 
   if (!hasAverageData) {
     return <p className="chart-empty">No glucose readings available in the last {days} days.</p>;
@@ -87,8 +107,8 @@ export default function GlucoseAverageChart({ data, days, targetMin, targetMax }
 
           {hasTargetRange ? (
             <ReferenceArea
-              y1={targetMin}
-              y2={targetMax}
+              y1={numericTargetMin}
+              y2={numericTargetMax}
               fill="#86efac"
               fillOpacity={0.18}
               ifOverflow="extendDomain"
@@ -125,7 +145,7 @@ export default function GlucoseAverageChart({ data, days, targetMin, targetMax }
             {data.map((entry) => (
               <Cell
                 key={entry.bucketIndex}
-                fill={getBarColor(entry.averageGlucose, targetMin, targetMax)}
+                fill={getBarColor(entry, numericTargetMin, numericTargetMax)}
               />
             ))}
           </Bar>

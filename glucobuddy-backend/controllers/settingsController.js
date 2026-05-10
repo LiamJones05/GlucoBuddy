@@ -1,19 +1,14 @@
-const { pool, poolConnect } = require('../db');
+const { pool } = require('../db');
 const asyncHandler = require('../utils/asyncHandler');
 
-// GET USER SETTINGS
+// ── GET SETTINGS ──────────────────────────────────────────────────────────────
 exports.getSettings = asyncHandler(async (req, res) => {
-  await poolConnect;
+  const result = await pool.query(
+    `SELECT * FROM user_settings WHERE user_id = $1`,
+    [req.user.id]
+  );
 
-  const result = await pool.request()
-    .input('user_id', req.user.id)
-    .query(`
-      SELECT *
-      FROM UserSettings
-      WHERE user_id = @user_id
-    `);
-
-  const settings = result.recordset[0];
+  const settings = result.rows[0];
 
   if (!settings) {
     const err = new Error('Settings not found');
@@ -24,34 +19,31 @@ exports.getSettings = asyncHandler(async (req, res) => {
   return res.json(settings);
 });
 
-// UPDATE USER SETTINGS
+// ── UPDATE SETTINGS ───────────────────────────────────────────────────────────
 exports.updateSettings = asyncHandler(async (req, res) => {
-  const settings = req.validatedBody;
+  const s = req.validatedBody;
 
-  await poolConnect;
+  await pool.query(
+    `UPDATE user_settings
+     SET
+       correction_ratio     = $1,
+       target_min           = $2,
+       target_max           = $3,
+       carb_ratio_morning   = $4,
+       carb_ratio_afternoon = $5,
+       carb_ratio_evening   = $6,
+       updated_at           = NOW()
+     WHERE user_id = $7`,
+    [
+      s.correction_ratio,
+      s.target_min,
+      s.target_max,
+      s.carb_ratio_morning,
+      s.carb_ratio_afternoon,
+      s.carb_ratio_evening,
+      req.user.id,
+    ]
+  );
 
-  await pool.request()
-    .input('user_id', req.user.id)
-    .input('correction_ratio', settings.correction_ratio)
-    .input('target_min', settings.target_min)
-    .input('target_max', settings.target_max)
-    .input('carb_ratio_morning', settings.carb_ratio_morning)
-    .input('carb_ratio_afternoon', settings.carb_ratio_afternoon)
-    .input('carb_ratio_evening', settings.carb_ratio_evening)
-    .query(`
-      UPDATE UserSettings
-      SET
-        correction_ratio = @correction_ratio,
-        target_min = @target_min,
-        target_max = @target_max,
-        carb_ratio_morning = @carb_ratio_morning,
-        carb_ratio_afternoon = @carb_ratio_afternoon,
-        carb_ratio_evening = @carb_ratio_evening
-      WHERE user_id = @user_id
-    `);
-
-  return res.json({
-    message: 'Settings updated'
-  });
+  return res.json({ message: 'Settings updated' });
 });
-

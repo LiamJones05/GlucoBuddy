@@ -1,7 +1,7 @@
 # Ensure script runs from project root
 Set-Location $PSScriptRoot
 
-$containerName = "sqlserver-dev"
+$containerName = "glucobuddy-postgres"
 
 Write-Host "==============================="
 Write-Host " Starting GlucoBuddy Dev Stack "
