@@ -20,6 +20,9 @@ const INSULIN_LOGGED_AT_SQL = `
   )
 `;
 
+// Valid CGM trend values — anything else is ignored
+const VALID_CGM_TRENDS = new Set(['↑', '↗', '→', '↘', '↓']);
+
 exports.calculateDose = asyncHandler(async (req, res) => {
   const body = req.validatedBody;
 
@@ -32,35 +35,39 @@ exports.calculateDose = asyncHandler(async (req, res) => {
     recent_exercise_minutes,
     planned_exercise_minutes,
     calculation_time,
-  } = req.validatedBody;
+    cgm_trend,
+  } = body;
+
+  // Sanitise cgm_trend — only accept known arrow values
+  const cgmTrend = cgm_trend && VALID_CGM_TRENDS.has(cgm_trend) ? cgm_trend : null;
 
   const inputs = {
     glucose,
     carbs,
-    proteinGrams: protein_grams,
-    fatGrams: fat_grams,
-    alcoholUnits: alcohol_units,
-    recentExerciseMinutes: recent_exercise_minutes,
+    proteinGrams:           protein_grams,
+    fatGrams:               fat_grams,
+    alcoholUnits:           alcohol_units,
+    recentExerciseMinutes:  recent_exercise_minutes,
     plannedExerciseMinutes: planned_exercise_minutes,
   };
 
-  // 🟢 HYPO SHORT-CIRCUIT
+  // ── Hypo short-circuit ────────────────────────────────────────────────────
   if (inputs.glucose < HYPO_THRESHOLD) {
     return res.json({
       recommendedDose: 0,
       hypo: true,
       warning: {
-        type: 'hypo',
+        type:    'hypo',
         message: 'Low blood sugar detected',
-        action: 'Consider fast-acting carbohydrates and rechecking glucose.',
-        carbs: 12,
+        action:  'Consider fast-acting carbohydrates and rechecking glucose.',
+        carbs:   12,
       },
     });
   }
 
   await poolConnect;
 
-  // 🟢 LOAD SETTINGS
+  // ── Load settings ─────────────────────────────────────────────────────────
   const settingsResult = await pool
     .request()
     .input('user_id', sql.Int, req.user.id)
@@ -82,9 +89,9 @@ exports.calculateDose = asyncHandler(async (req, res) => {
     ? JSON.parse(settings.adaptive_params)
     : null;
 
-  // 🟢 TIME HANDLING
-  const calculationTimeText = body.calculation_time
-    ? normaliseDateTime(body.calculation_time)
+  // ── Time handling ─────────────────────────────────────────────────────────
+  const calculationTimeText = calculation_time
+    ? normaliseDateTime(calculation_time)
     : formatLocalDateTime();
 
   const calculationTime = parseLocalDateTime(calculationTimeText);
@@ -93,11 +100,11 @@ exports.calculateDose = asyncHandler(async (req, res) => {
     calculationTime.getTime() - (INSULIN_ACTION_HOURS * 60 * 60 * 1000)
   );
 
-  // 🟢 LOAD INSULIN HISTORY
+  // ── Load insulin history ──────────────────────────────────────────────────
   const insulinResult = await pool
     .request()
-    .input('user_id', sql.Int, req.user.id)
-    .input('window_start', sql.DateTime2, insulinWindowStart)
+    .input('user_id',          sql.Int,      req.user.id)
+    .input('window_start',     sql.DateTime2, insulinWindowStart)
     .input('calculation_time', sql.DateTime2, calculationTime)
     .query(`
       SELECT
@@ -116,29 +123,30 @@ exports.calculateDose = asyncHandler(async (req, res) => {
       ORDER BY logged_date ASC, logged_time ASC
     `);
 
-  // 🟢 CALCULATE DOSE
+  // ── Calculate dose ────────────────────────────────────────────────────────
   let recommendation;
 
   try {
     recommendation = calculateDoseRecommendation({
       inputs,
       settings,
-      insulinLogs: insulinResult.recordset,
+      insulinLogs:     insulinResult.recordset,
       calculationTime,
       adaptiveParams,
+      cgmTrend,
     });
   } catch (err) {
     err.status = 400;
     throw err;
   }
 
-  // 🟢 STORE CALCULATION
+  // ── Store calculation (trend-adjusted dose) ───────────────────────────────
   await pool
     .request()
-    .input('user_id', sql.Int, req.user.id)
+    .input('user_id', sql.Int,   req.user.id)
     .input('glucose', sql.Float, inputs.glucose)
-    .input('carbs', sql.Float, inputs.carbs)
-    .input('dose', sql.Float, recommendation.recommendedDose)
+    .input('carbs',   sql.Float, inputs.carbs)
+    .input('dose',    sql.Float, recommendation.recommendedDose)
     .query(`
       INSERT INTO DoseCalculations (
         user_id,
@@ -160,9 +168,9 @@ exports.calculateDose = asyncHandler(async (req, res) => {
     ...recommendation,
     calculationTime: calculationTimeText,
     advancedUsed:
-      inputs.proteinGrams > 0 ||
-      inputs.fatGrams > 0 ||
-      inputs.alcoholUnits > 0 ||
+      inputs.proteinGrams          > 0 ||
+      inputs.fatGrams              > 0 ||
+      inputs.alcoholUnits          > 0 ||
       inputs.recentExerciseMinutes > 0 ||
       inputs.plannedExerciseMinutes > 0,
   });

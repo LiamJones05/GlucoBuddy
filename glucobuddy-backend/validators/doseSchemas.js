@@ -31,6 +31,8 @@ const calculateDoseSchema = z.object({
   planned_exercise_minutes: optionalNumber(0, 300),
 
   calculation_time: isoDateTimeSchema.optional(),
+
+  cgm_trend: z.string().optional(),
 });
 
 module.exports = {

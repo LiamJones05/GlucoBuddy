@@ -19,30 +19,28 @@ function toSafeNumber(value, fallback = 0) {
 
 export default function Calculator() {
   const today = getLocalDateValue();
-  const [calculatorError, setCalculatorError] = useState('');
-  const [calculatorSuccess, setCalculatorSuccess] = useState('');
-  const [calculatorWarning, setCalculatorWarning] = useState(null);
-  const [isCalculating, setIsCalculating] = useState(false);
-  const [isConfirmingDose, setIsConfirmingDose] = useState(false);
-  const [doseResult, setDoseResult] = useState(null);
-  const [finalDose, setFinalDose] = useState('');
-  const [showAdvancedInputs, setShowAdvancedInputs] = useState(false);
-  const [calculatorDate, setCalculatorDate] = useState(today);
-  const [calculatorTime, setCalculatorTime] = useState(getLocalTimeValue());
-  const [calculatorGlucose, setCalculatorGlucose] = useState('');
-  const [calculatorCarbs, setCalculatorCarbs] = useState('');
-  const [calculatorProtein, setCalculatorProtein] = useState('');
-  const [calculatorFat, setCalculatorFat] = useState('');
-  const [calculatorAlcohol, setCalculatorAlcohol] = useState('');
+  const [calculatorError,          setCalculatorError]          = useState('');
+  const [calculatorSuccess,        setCalculatorSuccess]        = useState('');
+  const [calculatorWarning,        setCalculatorWarning]        = useState(null);
+  const [isCalculating,            setIsCalculating]            = useState(false);
+  const [isConfirmingDose,         setIsConfirmingDose]         = useState(false);
+  const [doseResult,               setDoseResult]               = useState(null);
+  const [finalDose,                setFinalDose]                = useState('');
+  const [showAdvancedInputs,       setShowAdvancedInputs]       = useState(false);
+  const [calculatorDate,           setCalculatorDate]           = useState(today);
+  const [calculatorTime,           setCalculatorTime]           = useState(getLocalTimeValue());
+  const [calculatorGlucose,        setCalculatorGlucose]        = useState('');
+  const [calculatorCarbs,          setCalculatorCarbs]          = useState('');
+  const [calculatorProtein,        setCalculatorProtein]        = useState('');
+  const [calculatorFat,            setCalculatorFat]            = useState('');
+  const [calculatorAlcohol,        setCalculatorAlcohol]        = useState('');
   const [calculatorRecentExercise, setCalculatorRecentExercise] = useState('');
-  const [calculatorPlannedExercise, setCalculatorPlannedExercise] = useState('');
-  const [cgmTrend, setCgmTrend] = useState(null);
+  const [calculatorPlannedExercise,setCalculatorPlannedExercise]= useState('');
+  const [cgmTrend,                 setCgmTrend]                 = useState(null);
 
+  // Reset result when any input changes
   useEffect(() => {
-    if (!doseResult) {
-      return;
-    }
-
+    if (!doseResult) return;
     setCalculatorWarning(null);
     setDoseResult(null);
     setFinalDose('');
@@ -62,7 +60,7 @@ export default function Calculator() {
 
   const handleCalculateDose = async () => {
     const numericGlucose = Number(calculatorGlucose);
-    const numericCarbs = Number(calculatorCarbs);
+    const numericCarbs   = Number(calculatorCarbs);
 
     if (!Number.isFinite(numericGlucose) || numericGlucose <= 0) {
       setCalculatorError('Enter a valid glucose value for the calculation.');
@@ -85,29 +83,21 @@ export default function Calculator() {
 
     try {
       const res = await calculateDose({
-        glucose: numericGlucose,
-        carbs: numericCarbs,
-        calculation_time: `${calculatorDate}T${calculatorTime}:00`,
-        protein_grams: Number(calculatorProtein || 0),
-        fat_grams: Number(calculatorFat || 0),
-        alcohol_units: Number(calculatorAlcohol || 0),
-        recent_exercise_minutes: Number(calculatorRecentExercise || 0),
-        planned_exercise_minutes: Number(calculatorPlannedExercise || 0),
+        glucose:                   numericGlucose,
+        carbs:                     numericCarbs,
+        calculation_time:          `${calculatorDate}T${calculatorTime}:00`,
+        protein_grams:             Number(calculatorProtein  || 0),
+        fat_grams:                 Number(calculatorFat      || 0),
+        alcohol_units:             Number(calculatorAlcohol  || 0),
+        recent_exercise_minutes:   Number(calculatorRecentExercise  || 0),
+        planned_exercise_minutes:  Number(calculatorPlannedExercise || 0),
+        // CGM trend is now sent to the backend — the engine applies the
+        // multiplier and saves the adjusted dose to DoseCalculations
+        cgm_trend: cgmTrend ?? undefined,
       });
 
       setDoseResult(res.data);
       setFinalDose(String(res.data.recommendedDose));
-       const trendMultipliers = {
-        '↑':  1.20,
-        '↗':  1.10,
-        '→':  1.00,
-        '↘':  0.90,
-        '↓':  0.80,
-      };
-      const multiplier = cgmTrend ? trendMultipliers[cgmTrend] : 1.00;
-      const adjustedDose = Math.round(res.data.recommendedDose * multiplier * 2) / 2;
-      setDoseResult({ ...res.data, recommendedDose: adjustedDose, cgmTrend, cgmMultiplier: multiplier });
-      setFinalDose(String(adjustedDose));
       setCalculatorWarning(res.data.warning || null);
     } catch (err) {
       console.error('Error calculating dose:', err);
@@ -139,9 +129,9 @@ export default function Calculator() {
 
     try {
       await logInsulin({
-        units: numericFinalDose,
-        insulin_type: 'rapid',
-        logged_at: `${calculatorDate}T${calculatorTime}:00`,
+        units:         numericFinalDose,
+        insulin_type:  'rapid',
+        logged_at:     `${calculatorDate}T${calculatorTime}:00`,
         glucose_level: Number(calculatorGlucose),
       });
 
@@ -154,7 +144,6 @@ export default function Calculator() {
       setCalculatorCarbs('');
     } catch (err) {
       console.error('Error confirming insulin dose:', err);
-
       setCalculatorError(
         err.response?.data?.error ||
         err.response?.data?.message ||
@@ -165,33 +154,37 @@ export default function Calculator() {
     }
   };
 
-  const breakdown = doseResult?.breakdown ?? {};
+  const breakdown         = doseResult?.breakdown ?? {};
   const advancedBreakdown = breakdown.advanced ?? {};
-  const carbDose = toSafeNumber(breakdown.carbDose);
-  const correctionDose = toSafeNumber(breakdown.correctionDose);
-  const proteinDose = toSafeNumber(advancedBreakdown.proteinDose);
-  const fatDose = toSafeNumber(advancedBreakdown.fatDose);
-  const alcoholReduction = toSafeNumber(advancedBreakdown.alcoholReduction);
+  const carbDose                = toSafeNumber(breakdown.carbDose);
+  const correctionDose          = toSafeNumber(breakdown.correctionDose);
+  const proteinDose             = toSafeNumber(advancedBreakdown.proteinDose);
+  const fatDose                 = toSafeNumber(advancedBreakdown.fatDose);
+  const alcoholReduction        = toSafeNumber(advancedBreakdown.alcoholReduction);
   const recentExerciseReduction = toSafeNumber(advancedBreakdown.recentExerciseReduction);
-  const plannedExerciseReduction = toSafeNumber(advancedBreakdown.plannedExerciseReduction);
-  const iobAvailable = toSafeNumber(breakdown.iobAvailable, toSafeNumber(breakdown.iob));
-  const iobApplied = toSafeNumber(breakdown.iobApplied, Math.min(iobAvailable, correctionDose));
+  const plannedExerciseReduction= toSafeNumber(advancedBreakdown.plannedExerciseReduction);
+  const iobAvailable    = toSafeNumber(breakdown.iobAvailable, toSafeNumber(breakdown.iob));
+  const iobApplied      = toSafeNumber(breakdown.iobApplied, Math.min(iobAvailable, correctionDose));
   const netCorrectionDose = toSafeNumber(
     breakdown.netCorrectionDose,
     Math.max(0, correctionDose - iobApplied)
   );
   const advancedAssumptions = Array.isArray(advancedBreakdown.assumptions)
-    ? advancedBreakdown.assumptions
-    : [];
-  const advancedFlags = Array.isArray(advancedBreakdown.flags) ? advancedBreakdown.flags : [];
+    ? advancedBreakdown.assumptions : [];
+  const advancedFlags = Array.isArray(advancedBreakdown.flags)
+    ? advancedBreakdown.flags : [];
   const advancedUsed = Boolean(
     doseResult?.advancedUsed ||
-    proteinDose > 0 ||
-    fatDose > 0 ||
-    alcoholReduction > 0 ||
+    proteinDose             > 0 ||
+    fatDose                 > 0 ||
+    alcoholReduction        > 0 ||
     recentExerciseReduction > 0 ||
     plannedExerciseReduction > 0
   );
+
+  // CGM trend metadata comes from the backend breakdown
+  const resultCgmTrend      = breakdown.cgmTrend ?? null;
+  const resultCgmMultiplier = breakdown.cgmMultiplier ?? null;
 
   return (
     <div className="dashboard">
@@ -367,7 +360,7 @@ export default function Calculator() {
             </button>
           </div>
 
-          {calculatorError ? <p className="form-error">{calculatorError}</p> : null}
+          {calculatorError   ? <p className="form-error">{calculatorError}</p>     : null}
           {calculatorSuccess ? <p className="form-success">{calculatorSuccess}</p> : null}
           {calculatorWarning?.type === 'hypo' ? (
             <div className="warning-hypo">
@@ -386,7 +379,6 @@ export default function Calculator() {
                 <h4>Recommendation</h4>
                 <strong>Do not take insulin</strong>
               </div>
-
               <p className="insulin-note">
                 Treat low blood sugar with fast-acting carbohydrates before taking insulin.
               </p>
@@ -413,18 +405,20 @@ export default function Calculator() {
                 <p>Carb coverage: {carbDose.toFixed(2)} units</p>
                 <p>Correction before IOB: {correctionDose.toFixed(2)} units</p>
                 <p>Time sensitivity multiplier: {toSafeNumber(breakdown.sensitivityMultiplier, 1).toFixed(2)}</p>
-                {doseResult.cgmTrend && doseResult.cgmMultiplier !== 1 ? (
+
+                {resultCgmTrend && resultCgmMultiplier && resultCgmMultiplier !== 1 ? (
                   <p>
-                    CGM trend ({doseResult.cgmTrend}) adjustment:{' '}
-                    {doseResult.cgmMultiplier > 1 ? '+' : ''}
-                    {((doseResult.cgmMultiplier - 1) * 100).toFixed(0)}%
+                    CGM trend ({resultCgmTrend}) adjustment:{' '}
+                    {resultCgmMultiplier > 1 ? '+' : ''}
+                    {((resultCgmMultiplier - 1) * 100).toFixed(0)}%
                   </p>
                 ) : null}
-                {proteinDose > 0 ? <p>Protein adjustment: +{proteinDose.toFixed(2)} units</p> : null}
-                {fatDose > 0 ? <p>Fat adjustment: +{fatDose.toFixed(2)} units</p> : null}
-                {alcoholReduction > 0 ? <p>Alcohol reduction: -{alcoholReduction.toFixed(2)} units</p> : null}
-                {recentExerciseReduction > 0 ? <p>Recent exercise reduction: -{recentExerciseReduction.toFixed(2)} units</p> : null}
-                {plannedExerciseReduction > 0 ? <p>Expected exercise reduction: -{plannedExerciseReduction.toFixed(2)} units</p> : null}
+
+                {proteinDose             > 0 ? <p>Protein adjustment: +{proteinDose.toFixed(2)} units</p>              : null}
+                {fatDose                 > 0 ? <p>Fat adjustment: +{fatDose.toFixed(2)} units</p>                      : null}
+                {alcoholReduction        > 0 ? <p>Alcohol reduction: -{alcoholReduction.toFixed(2)} units</p>          : null}
+                {recentExerciseReduction > 0 ? <p>Recent exercise reduction: -{recentExerciseReduction.toFixed(2)} units</p>  : null}
+                {plannedExerciseReduction> 0 ? <p>Expected exercise reduction: -{plannedExerciseReduction.toFixed(2)} units</p>: null}
 
                 <p>IOB available: {iobAvailable.toFixed(2)} units</p>
                 <p>IOB applied to correction: -{iobApplied.toFixed(2)} units</p>
