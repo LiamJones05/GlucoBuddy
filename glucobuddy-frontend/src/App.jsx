@@ -7,7 +7,7 @@ import GlucoseLogging from './pages/GlucoseLogging';
 import Calculator from './pages/Calculator';
 import Settings from './pages/Settings';
 import Terms from './pages/Terms';
-import Privacy from './pages/privacy';
+import Privacy from './pages/Privacy';
 import MobileNav from './components/MobileNav';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'react-router-dom';

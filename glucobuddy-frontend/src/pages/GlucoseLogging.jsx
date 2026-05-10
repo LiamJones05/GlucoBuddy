@@ -198,17 +198,6 @@ export default function GlucoseLogging() {
               />
             </label>
 
-            <button onClick={handleAddGlucose} disabled={isSaving}>
-              {isSaving ? 'Saving...' : 'Add reading'}
-            </button>
-          </div>
-
-          {saveError ? <p className="form-error">{saveError}</p> : null}
-          {saveSuccess ? <p className="form-success">{saveSuccess}</p> : null}
-        </section>
-
-        <section className="card card--wide">
-          <div className="glucose-controls glucose-controls--view">
             <label>
               View date
               <input
@@ -217,23 +206,31 @@ export default function GlucoseLogging() {
                 onChange={(e) => setViewDate(e.target.value)}
               />
             </label>
+
+            <button onClick={handleAddGlucose} disabled={isSaving}>
+              {isSaving ? 'Saving...' : 'Add reading'}
+            </button>
           </div>
 
+          {saveError ? <p className="form-error">{saveError}</p> : null}
+          {saveSuccess ? <p className="form-success">{saveSuccess}</p> : null}
           {fetchError ? <p className="form-error">{fetchError}</p> : null}
-
-          {loading ? (
-            <p>Loading chart...</p>
-          ) : !hasChartData ? (
-            <p>No glucose or insulin data for {viewDate}</p>
-          ) : (
-            <GlucoseChart
-              data={chartData}
-              selectedDate={viewDate}
-              targetMin={settings?.target_min}
-              targetMax={settings?.target_max}
-            />
-          )}
         </section>
+      </div>
+
+      <div className="logging-chart-area">
+        {loading ? (
+          <p className="chart-empty">Loading chart...</p>
+        ) : !hasChartData ? (
+          <p className="chart-empty">No glucose or insulin data for {viewDate}</p>
+        ) : (
+          <GlucoseChart
+            data={chartData}
+            selectedDate={viewDate}
+            targetMin={settings?.target_min}
+            targetMax={settings?.target_max}
+          />
+        )}
       </div>
     </div>
   );

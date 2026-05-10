@@ -112,17 +112,20 @@
   grid-column: 1 / -1;
   padding: 1.2rem;
 }
+.logging-chart-area {
+  margin-top: 0.75rem;
+  margin-left: -1.5rem;
+  margin-right: -1.5rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border);
+  background: var(--card);
+}
 
 @media (max-width: 767px) {
-  .card {
-    padding: 0.8rem;
-  }
-
-  .card--wide {
-    grid-column: auto;
-    margin-left: -0.5rem;
-    margin-right: -0.5rem;
-    border-radius: 0;
+  .logging-chart-area {
+    margin-left: -0.75rem;
+    margin-right: -0.75rem;
+    padding: 0.8rem 0.75rem;
   }
 }
 
@@ -811,4 +814,303 @@ input {
 
 .cgm-trend-btn:active {
   transform: scale(0.96);
+}
+
+/* ============================= */
+/* OVERVIEW CARD LAYOUT          */
+/* ============================= */
+
+.overview-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.overview-card__header h3 {
+  margin: 0 0 0.4rem;
+}
+
+.overview-card__body {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 767px) {
+  .overview-card__body {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* ============================= */
+/* STATUS PILL                   */
+/* ============================= */
+
+.status-pill {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.status-pill--good {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-pill--moderate {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-pill--high {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+
+/* ============================= */
+/* PREDICTION CALLOUT            */
+/* ============================= */
+
+.prediction-callout {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.prediction-callout__label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.prediction-callout__value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+
+/* ============================= */
+/* TIR DONUT CHART               */
+/* ============================= */
+
+.tir-donut-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.tir-donut-chart {
+  position: relative;
+  width: 100%;
+  max-width: 220px;
+}
+
+.tir-donut-centre {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.tir-donut-centre__value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+}
+
+.tir-donut-centre__label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 0.2rem;
+}
+
+.tir-legend {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.tir-legend__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.tir-legend__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.tir-legend__label {
+  flex: 1;
+  color: var(--text-secondary);
+}
+
+.tir-legend__value {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.tir-tooltip {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+
+.tir-tooltip__label {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.tir-tooltip__value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+
+/* ============================= */
+/* STAT TILES                    */
+/* ============================= */
+
+.stat-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 480px) {
+  .stat-tiles {
+    grid-template-columns: 1fr;
+  }
+}
+
+.stat-tile {
+  padding: 0.75rem;
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--tile-accent, var(--primary));
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.stat-tile__label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stat-tile__value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+
+/* ============================= */
+/* COMPARISON BLOCK              */
+/* ============================= */
+
+.comparison-block {
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+
+.comparison-block__title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.6rem;
+}
+
+.comparison-block__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.comparison-block__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+
+/* ============================= */
+/* DELTA INDICATORS              */
+/* ============================= */
+
+.delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+}
+
+.delta--good {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.delta--bad {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.delta--neutral {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-weight: 500;
 }
