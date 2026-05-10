@@ -13,7 +13,7 @@
  * meals or corrections will have contaminated the signal.
  */
 
-const { pool, poolConnect, sql } = require('../db');
+const { pool } = require('../db');
 const {
   parseAdaptiveParams,
   processOutcome,
@@ -33,33 +33,31 @@ const OUTCOME_WINDOW_MAX_HOURS = 3.5;
  * @returns {object|null} DoseCalculation row
  */
 async function findPendingOutcomeDose(userId) {
-  await poolConnect;
-
   const now = new Date();
   const windowStart = new Date(now.getTime() - OUTCOME_WINDOW_MAX_HOURS * 60 * 60 * 1000);
   const windowEnd = new Date(now.getTime() - OUTCOME_WINDOW_MIN_HOURS * 60 * 60 * 1000);
 
-  const result = await pool.request()
-    .input('user_id', sql.Int, userId)
-    .input('window_start', sql.DateTime2, windowStart)
-    .input('window_end', sql.DateTime2, windowEnd)
-    .query(`
-      SELECT TOP 1
+  const result = await pool.query(
+    `
+      SELECT
         id,
         glucose_input,
         carbs_input,
         recommended_dose,
         created_at
-      FROM DoseCalculations
-      WHERE user_id = @user_id
+      FROM dose_calculations
+      WHERE user_id = $1
         AND outcome_glucose IS NULL
-        AND confirmed_administered = 1
-        AND created_at >= @window_start
-        AND created_at <= @window_end
+        AND confirmed_administered = TRUE
+        AND created_at >= $2
+        AND created_at <= $3
       ORDER BY created_at DESC
-    `);
+      LIMIT 1
+    `,
+    [userId, windowStart, windowEnd]
+  );
 
-  return result.recordset[0] ?? null;
+  return result.rows[0] ?? null;
 }
 
 /**
@@ -98,19 +96,17 @@ async function checkPendingOutcome(userId) {
  * @returns {object} { success, decision, updatedParams }
  */
 async function recordOutcome({ userId, doseId, outcomeGlucose }) {
-  await poolConnect;
-
   // ── Fetch the dose calculation ─────────────────────────────────────────────
-  const doseResult = await pool.request()
-    .input('id', sql.Int, doseId)
-    .input('user_id', sql.Int, userId)
-    .query(`
+  const doseResult = await pool.query(
+    `
       SELECT id, created_at, outcome_glucose
-      FROM DoseCalculations
-      WHERE id = @id AND user_id = @user_id
-    `);
+      FROM dose_calculations
+      WHERE id = $1 AND user_id = $2
+    `,
+    [doseId, userId]
+  );
 
-  const dose = doseResult.recordset[0];
+  const dose = doseResult.rows[0];
 
   if (!dose) {
     const err = new Error('Dose calculation not found');
@@ -125,9 +121,8 @@ async function recordOutcome({ userId, doseId, outcomeGlucose }) {
   }
 
   // ── Fetch user settings and adaptive params ────────────────────────────────
-  const settingsResult = await pool.request()
-    .input('user_id', sql.Int, userId)
-    .query(`
+  const settingsResult = await pool.query(
+    `
       SELECT
         correction_ratio,
         target_min,
@@ -137,11 +132,13 @@ async function recordOutcome({ userId, doseId, outcomeGlucose }) {
         carb_ratio_evening,
         adaptive_enabled,
         adaptive_params
-      FROM UserSettings
-      WHERE user_id = @user_id
-    `);
+      FROM user_settings
+      WHERE user_id = $1
+    `,
+    [userId]
+  );
 
-  const settings = settingsResult.recordset[0];
+  const settings = settingsResult.rows[0];
 
   if (!settings) {
     const err = new Error('User settings not found');
@@ -150,18 +147,16 @@ async function recordOutcome({ userId, doseId, outcomeGlucose }) {
   }
 
   // ── Persist the outcome reading ────────────────────────────────────────────
-  await pool.request()
-    .input('id', sql.Int, doseId)
-    .input('user_id', sql.Int, userId)
-    .input('outcome_glucose', sql.Decimal(5, 2), outcomeGlucose)
-    .input('outcome_recorded_at', sql.DateTime2, new Date())
-    .query(`
-      UPDATE DoseCalculations
+  await pool.query(
+    `
+      UPDATE dose_calculations
       SET
-        outcome_glucose = @outcome_glucose,
-        outcome_recorded_at = @outcome_recorded_at
-      WHERE id = @id AND user_id = @user_id
-    `);
+        outcome_glucose = $1,
+        outcome_recorded_at = $2
+      WHERE id = $3 AND user_id = $4
+    `,
+    [outcomeGlucose, new Date(), doseId, userId]
+  );
 
   // ── Run adaptive engine if enabled ────────────────────────────────────────
   if (!settings.adaptive_enabled) {
@@ -186,14 +181,14 @@ async function recordOutcome({ userId, doseId, outcomeGlucose }) {
   });
 
   // ── Persist updated adaptive params ───────────────────────────────────────
-  await pool.request()
-    .input('user_id', sql.Int, userId)
-    .input('adaptive_params', sql.NVarChar(sql.MAX), JSON.stringify(updatedParams))
-    .query(`
-      UPDATE UserSettings
-      SET adaptive_params = @adaptive_params
-      WHERE user_id = @user_id
-    `);
+  await pool.query(
+    `
+      UPDATE user_settings
+      SET adaptive_params = $1
+      WHERE user_id = $2
+    `,
+    [JSON.stringify(updatedParams), userId]
+  );
 
   return { success: true, decision, updatedParams };
 }

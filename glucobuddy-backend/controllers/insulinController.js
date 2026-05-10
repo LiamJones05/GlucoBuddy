@@ -1,164 +1,72 @@
-﻿const { pool, poolConnect, sql } = require('../db');
+﻿const { pool } = require('../db');
 const asyncHandler = require('../utils/asyncHandler');
 const {
   DATE_PATTERN,
-  DATE_TIME_PATTERN,
-  buildSqlTimeValue,
   formatLocalDateTime,
-  parseLocalDateTime,
   splitLoggedAt,
 } = require('../utils/dateTime');
 
-const INSULIN_LOGGED_AT_SQL = `
-  CAST(
-    CONCAT(
-      CONVERT(varchar(10), logged_date, 23),
-      'T',
-      CONVERT(varchar(8), logged_time, 108)
-    ) AS datetime2(0)
-  )
-`;
-
-async function insulinTableHasLoggedAtColumn(transaction) {
-  const result = await new sql.Request(transaction).query(`
-    SELECT CASE
-      WHEN COL_LENGTH('dbo.InsulinLogs', 'logged_at') IS NULL THEN 0
-      ELSE 1
-    END AS has_logged_at
-  `);
-
-  return Boolean(result.recordset[0]?.has_logged_at);
-}
-
+// ── CREATE INSULIN ────────────────────────────────────────────────────────────
 exports.createInsulin = asyncHandler(async (req, res) => {
-  const {
-  units,
-  insulin_type,
-  logged_at,
-  glucose_level,
-} = req.validatedBody;
+  const { units, insulin_type, logged_at, glucose_level } = req.validatedBody;
 
-  await poolConnect;
+  const { loggedAtText, loggedDate, loggedTime } = splitLoggedAt(
+    logged_at || formatLocalDateTime()
+  );
 
-    const {
-      loggedAtText,
-      loggedDate,
-      loggedTime,
-    } = splitLoggedAt(logged_at || formatLocalDateTime());
+  const client = await pool.connect();
 
-    let transaction;
+  try {
+    await client.query('BEGIN');
 
-    try {
-      transaction = new sql.Transaction(pool);
-      await transaction.begin();
+    // Insert insulin log
+    await client.query(
+      `INSERT INTO insulin_logs (user_id, units, insulin_type, logged_date, logged_time)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [req.user.id, units, insulin_type, loggedDate, loggedTime]
+    );
 
-      const hasLoggedAtColumn = await insulinTableHasLoggedAtColumn(transaction);
-      const insulinRequest = new sql.Request(transaction)
-        .input('user_id', sql.Int, req.user.id)
-        .input('units', sql.Decimal(6, 2), units)
-        .input('type', sql.NVarChar(50), insulin_type)
-        .input('logged_date', sql.Date, loggedDate)
-        .input('logged_time', sql.Time, buildSqlTimeValue(loggedTime));
+    // Mark the most recent unconfirmed dose calculation as administered
+    await client.query(
+      `UPDATE dose_calculations
+       SET confirmed_administered = TRUE
+       WHERE id = (
+         SELECT id FROM dose_calculations
+         WHERE user_id = $1
+           AND confirmed_administered = FALSE
+           AND created_at >= NOW() - INTERVAL '20 minutes'
+         ORDER BY created_at DESC
+         LIMIT 1
+       )`,
+      [req.user.id]
+    );
 
-      let insulinInsertQuery = `
-        INSERT INTO InsulinLogs (
-          user_id,
-          units,
-          insulin_type,
-          logged_date,
-          logged_time
-        )
-        VALUES (
-          @user_id,
-          @units,
-          @type,
-          @logged_date,
-          @logged_time
-        )
-      `;
-
-      if (hasLoggedAtColumn) {
-        insulinRequest.input('logged_at', sql.DateTime2, parseLocalDateTime(loggedAtText));
-        insulinInsertQuery = `
-          INSERT INTO InsulinLogs (
-            user_id,
-            units,
-            insulin_type,
-            logged_date,
-            logged_time,
-            logged_at
-          )
-          VALUES (
-            @user_id,
-            @units,
-            @type,
-            @logged_date,
-            @logged_time,
-            @logged_at
-          )
-        `;
-      }
-
-      await insulinRequest.query(insulinInsertQuery);
-
-      await new sql.Request(transaction)
-        .input('user_id', sql.Int, req.user.id)
-        .query(`
-          UPDATE DoseCalculations
-          SET confirmed_administered = 1
-          WHERE id = (
-            SELECT TOP 1 id
-            FROM DoseCalculations
-            WHERE user_id = @user_id
-              AND confirmed_administered = 0
-              AND created_at >= DATEADD(minute, -20, GETDATE())
-            ORDER BY created_at DESC
-          )
-        `);
-
-      if (glucose_level !== null) {
-        await new sql.Request(transaction)
-          .input('user_id', sql.Int, req.user.id)
-          .input('glucose_level', sql.Float, glucose_level)
-          .input('logged_date', sql.Date, loggedDate)
-          .input('logged_time', sql.Time, buildSqlTimeValue(loggedTime))
-          .query(`
-            INSERT INTO GlucoseLogs (
-              user_id,
-              glucose_level,
-              logged_date,
-              logged_time
-            )
-            VALUES (
-              @user_id,
-              @glucose_level,
-              @logged_date,
-              @logged_time
-            )
-          `);
-      }
-
-      await transaction.commit();
-
-      return res.status(201).json({
-        message: glucose_level !== null ? 'Insulin and glucose logged' : 'Insulin logged',
-        logged_at: loggedAtText,
-        glucose_logged: glucose_level !== null,
-      });
-    } catch (err) {
-      if (transaction) {
-        try {
-          await transaction.rollback();
-        } catch (rollbackError) {
-          console.error('ROLLBACK ERROR:', rollbackError);
-        }
-      }
-
-      throw err;
+    // Optionally log glucose at the same time
+    if (glucose_level !== null && glucose_level !== undefined) {
+      await client.query(
+        `INSERT INTO glucose_logs (user_id, glucose_level, logged_date, logged_time)
+         VALUES ($1, $2, $3, $4)`,
+        [req.user.id, glucose_level, loggedDate, loggedTime]
+      );
     }
-  
+
+    await client.query('COMMIT');
+
+    return res.status(201).json({
+      message:       glucose_level != null ? 'Insulin and glucose logged' : 'Insulin logged',
+      logged_at:     loggedAtText,
+      glucose_logged: glucose_level != null,
+    });
+
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 });
 
+// ── GET INSULIN ───────────────────────────────────────────────────────────────
 exports.getInsulin = asyncHandler(async (req, res) => {
   const { date } = req.query;
 
@@ -168,41 +76,37 @@ exports.getInsulin = asyncHandler(async (req, res) => {
     throw err;
   }
 
-  
-    await poolConnect;
+  let queryText = `
+    SELECT
+      id,
+      user_id,
+      units,
+      insulin_type,
+      TO_CHAR(logged_date, 'YYYY-MM-DD') AS logged_date,
+      TO_CHAR(logged_time, 'HH24:MI:SS') AS logged_time,
+      TO_CHAR(logged_date, 'YYYY-MM-DD') || 'T' || TO_CHAR(logged_time, 'HH24:MI:SS') AS logged_at
+    FROM insulin_logs
+    WHERE user_id = $1
+      AND logged_date IS NOT NULL
+      AND logged_time IS NOT NULL
+  `;
 
-    let query = `
-      SELECT
-        id,
-        user_id,
-        units,
-        insulin_type,
-        CONVERT(varchar(10), logged_date, 23) AS logged_date,
-        CONVERT(varchar(8), logged_time, 108) AS logged_time,
-        CONCAT(
-          CONVERT(varchar(10), logged_date, 23),
-          'T',
-          CONVERT(varchar(8), logged_time, 108)
-        ) AS logged_at
-      FROM InsulinLogs
-      WHERE user_id = @user_id
-        AND logged_date IS NOT NULL
-        AND logged_time IS NOT NULL
+  const params = [req.user.id];
+
+  if (date) {
+    // Include readings from 4 hours before the date to capture overnight doses
+    params.push(date);
+    queryText += `
+      AND (logged_date || 'T' || logged_time::text)::timestamptz
+          >= ($${params.length}::date - INTERVAL '4 hours')
+      AND (logged_date || 'T' || logged_time::text)::timestamptz
+          < ($${params.length}::date + INTERVAL '1 day')
     `;
+    queryText += ` ORDER BY logged_date ASC, logged_time ASC`;
+  } else {
+    queryText += ` ORDER BY logged_date DESC, logged_time DESC`;
+  }
 
-    const request = pool.request().input('user_id', sql.Int, req.user.id);
-
-    if (date) {
-      query += `
-        AND ${INSULIN_LOGGED_AT_SQL} >= DATEADD(hour, -4, CAST(@date AS DATETIME2(0)))
-        AND ${INSULIN_LOGGED_AT_SQL} < DATEADD(day, 1, CAST(@date AS DATETIME2(0)))
-      `;
-      request.input('date', sql.Date, date);
-    }
-
-    query += ` ORDER BY logged_date ${date ? 'ASC' : 'DESC'}, logged_time ${date ? 'ASC' : 'DESC'}`;
-
-    const result = await request.query(query);
-    return res.json(result.recordset);
-  
+  const result = await pool.query(queryText, params);
+  return res.json(result.rows);
 });

@@ -1,4 +1,4 @@
-﻿const { pool, poolConnect, sql } = require('../db');
+const { pool } = require('../db');
 const { INSULIN_ACTION_HOURS } = require('../services/iobEngine');
 const { calculateDoseRecommendation } = require('../services/doseEngine');
 const asyncHandler = require('../utils/asyncHandler');
@@ -10,15 +10,7 @@ const {
 
 const HYPO_THRESHOLD = 4.0;
 
-const INSULIN_LOGGED_AT_SQL = `
-  CAST(
-    CONCAT(
-      CONVERT(varchar(10), logged_date, 23),
-      'T',
-      CONVERT(varchar(8), logged_time, 108)
-    ) AS datetime2(0)
-  )
-`;
+const INSULIN_LOGGED_AT_SQL = `(logged_date + logged_time)`;
 
 // Valid CGM trend values — anything else is ignored
 const VALID_CGM_TRENDS = new Set(['↑', '↗', '→', '↘', '↓']);
@@ -65,19 +57,17 @@ exports.calculateDose = asyncHandler(async (req, res) => {
     });
   }
 
-  await poolConnect;
-
   // ── Load settings ─────────────────────────────────────────────────────────
-  const settingsResult = await pool
-    .request()
-    .input('user_id', sql.Int, req.user.id)
-    .query(`
+  const settingsResult = await pool.query(
+    `
       SELECT *
-      FROM UserSettings
-      WHERE user_id = @user_id
-    `);
+      FROM user_settings
+      WHERE user_id = $1
+    `,
+    [req.user.id]
+  );
 
-  const settings = settingsResult.recordset[0];
+  const settings = settingsResult.rows[0];
 
   if (!settings) {
     const err = new Error('Settings not found');
@@ -101,27 +91,21 @@ exports.calculateDose = asyncHandler(async (req, res) => {
   );
 
   // ── Load insulin history ──────────────────────────────────────────────────
-  const insulinResult = await pool
-    .request()
-    .input('user_id',          sql.Int,      req.user.id)
-    .input('window_start',     sql.DateTime2, insulinWindowStart)
-    .input('calculation_time', sql.DateTime2, calculationTime)
-    .query(`
+  const insulinResult = await pool.query(
+    `
       SELECT
-        units,
-        CONCAT(
-          CONVERT(varchar(10), logged_date, 23),
-          'T',
-          CONVERT(varchar(8), logged_time, 108)
-        ) AS logged_at
-      FROM InsulinLogs
-      WHERE user_id = @user_id
+        units::float,
+        TO_CHAR(logged_date, 'YYYY-MM-DD') || 'T' || TO_CHAR(logged_time, 'HH24:MI:SS') AS logged_at
+      FROM insulin_logs
+      WHERE user_id = $1
         AND logged_date IS NOT NULL
         AND logged_time IS NOT NULL
-        AND ${INSULIN_LOGGED_AT_SQL} >= @window_start
-        AND ${INSULIN_LOGGED_AT_SQL} <= @calculation_time
+        AND ${INSULIN_LOGGED_AT_SQL} >= $2
+        AND ${INSULIN_LOGGED_AT_SQL} <= $3
       ORDER BY logged_date ASC, logged_time ASC
-    `);
+    `,
+    [req.user.id, insulinWindowStart, calculationTime]
+  );
 
   // ── Calculate dose ────────────────────────────────────────────────────────
   let recommendation;
@@ -130,7 +114,7 @@ exports.calculateDose = asyncHandler(async (req, res) => {
     recommendation = calculateDoseRecommendation({
       inputs,
       settings,
-      insulinLogs:     insulinResult.recordset,
+      insulinLogs:     insulinResult.rows,
       calculationTime,
       adaptiveParams,
       cgmTrend,
@@ -141,14 +125,9 @@ exports.calculateDose = asyncHandler(async (req, res) => {
   }
 
   // ── Store calculation (trend-adjusted dose) ───────────────────────────────
-  await pool
-    .request()
-    .input('user_id', sql.Int,   req.user.id)
-    .input('glucose', sql.Float, inputs.glucose)
-    .input('carbs',   sql.Float, inputs.carbs)
-    .input('dose',    sql.Float, recommendation.recommendedDose)
-    .query(`
-      INSERT INTO DoseCalculations (
+  await pool.query(
+    `
+      INSERT INTO dose_calculations (
         user_id,
         glucose_input,
         carbs_input,
@@ -156,13 +135,15 @@ exports.calculateDose = asyncHandler(async (req, res) => {
         confirmed_administered
       )
       VALUES (
-        @user_id,
-        @glucose,
-        @carbs,
-        @dose,
-        0
+        $1,
+        $2,
+        $3,
+        $4,
+        FALSE
       )
-    `);
+    `,
+    [req.user.id, inputs.glucose, inputs.carbs, recommendation.recommendedDose]
+  );
 
   return res.json({
     ...recommendation,

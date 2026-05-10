@@ -50,7 +50,11 @@ function getOverallStatus(metrics) {
 
 function getPeakInterval(data) {
   if (!Array.isArray(data) || data.length === 0) return null;
-  return data.reduce((prev, curr) => curr.average > prev.average ? curr : prev)?.label || null;
+  const intervalsWithAverage = data.filter((entry) => Number.isFinite(Number(entry.averageGlucose)));
+  if (intervalsWithAverage.length === 0) return null;
+  return intervalsWithAverage.reduce(
+    (prev, curr) => Number(curr.averageGlucose) > Number(prev.averageGlucose) ? curr : prev
+  )?.label || null;
 }
 
 function DeltaIndicator({ delta, positiveIsGood = true }) {

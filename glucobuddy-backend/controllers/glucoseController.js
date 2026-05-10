@@ -1,14 +1,8 @@
-﻿const { pool, poolConnect, sql } = require('../db');
+﻿const { pool } = require('../db');
 const asyncHandler = require('../utils/asyncHandler');
-const {
-  DATE_PATTERN,
-  buildSqlTimeValue,
-  splitLoggedAt,
-} = require('../utils/dateTime');
-
-const { buildPatternInsights } = require('../services/insightEngine');
+const { DATE_PATTERN, splitLoggedAt } = require('../utils/dateTime');
+const { buildPatternInsights }   = require('../services/insightEngine');
 const { buildGlucosePrediction } = require('../services/predictionEngine');
-
 const {
   calculateClinicalMetrics,
   calculateTimeOfDayAverages,
@@ -19,11 +13,10 @@ const {
 const VALID_TIME_WINDOWS = new Set([14, 30, 90]);
 
 function formatLocalDate(date = new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-
-  return `${year}-${month}-${day}`;
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 function shiftLocalDate(date, days) {
@@ -33,111 +26,62 @@ function shiftLocalDate(date, days) {
 }
 
 async function loadSettings(userId) {
-  const result = await pool
-    .request()
-    .input('user_id', sql.Int, userId)
-    .query(`
-      SELECT *
-      FROM UserSettings
-      WHERE user_id = @user_id
-    `);
-
-  return result.recordset[0];
+  const result = await pool.query(
+    `SELECT * FROM user_settings WHERE user_id = $1`,
+    [userId]
+  );
+  return result.rows[0];
 }
 
 async function loadGlucoseRange(userId, startDate, endDate) {
-  const result = await pool
-    .request()
-    .input('user_id', sql.Int, userId)
-    .input('start_date', sql.Date, startDate)
-    .input('end_date', sql.Date, endDate)
-    .query(`
-      SELECT
-        id,
-        CAST(glucose_level AS FLOAT) AS glucose_level,
-        CONVERT(varchar(10), logged_date, 23) AS logged_date,
-        CONCAT(
-          CONVERT(varchar(10), logged_date, 23),
-          'T',
-          CONVERT(varchar(8), logged_time, 108)
-        ) AS logged_at
-      FROM GlucoseLogs
-      WHERE user_id = @user_id
-        AND logged_date >= @start_date
-        AND logged_date <= @end_date
-      ORDER BY logged_date ASC, logged_time ASC
-    `);
-
-  return result.recordset;
+  const result = await pool.query(
+    `SELECT
+       id,
+       glucose_level::float,
+       TO_CHAR(logged_date, 'YYYY-MM-DD') AS logged_date,
+       TO_CHAR(logged_date, 'YYYY-MM-DD') || 'T' || TO_CHAR(logged_time, 'HH24:MI:SS') AS logged_at
+     FROM glucose_logs
+     WHERE user_id = $1
+       AND logged_date >= $2
+       AND logged_date <= $3
+     ORDER BY logged_date ASC, logged_time ASC`,
+    [userId, startDate, endDate]
+  );
+  return result.rows;
 }
 
 async function loadInsulinRange(userId, startDate, endDate) {
-  const result = await pool
-    .request()
-    .input('user_id', sql.Int, userId)
-    .input('start_date', sql.Date, startDate)
-    .input('end_date', sql.Date, endDate)
-    .query(`
-      SELECT
-        id,
-        CAST(units AS FLOAT) AS units,
-        insulin_type,
-        CONCAT(
-          CONVERT(varchar(10), logged_date, 23),
-          'T',
-          CONVERT(varchar(8), logged_time, 108)
-        ) AS logged_at
-      FROM InsulinLogs
-      WHERE user_id = @user_id
-        AND logged_date >= @start_date
-        AND logged_date <= @end_date
-      ORDER BY logged_date ASC, logged_time ASC
-    `);
-
-  return result.recordset;
+  const result = await pool.query(
+    `SELECT
+       id,
+       units::float,
+       insulin_type,
+       TO_CHAR(logged_date, 'YYYY-MM-DD') || 'T' || TO_CHAR(logged_time, 'HH24:MI:SS') AS logged_at
+     FROM insulin_logs
+     WHERE user_id = $1
+       AND logged_date >= $2
+       AND logged_date <= $3
+     ORDER BY logged_date ASC, logged_time ASC`,
+    [userId, startDate, endDate]
+  );
+  return result.rows;
 }
 
+// ── CREATE GLUCOSE ────────────────────────────────────────────────────────────
 exports.createGlucose = asyncHandler(async (req, res) => {
-  const {
-    glucose_level,
-    logged_at,
-  } = req.validatedBody;
+  const { glucose_level, logged_at } = req.validatedBody;
+  const { loggedAtText, loggedDate, loggedTime } = splitLoggedAt(logged_at);
 
-  await poolConnect;
+  await pool.query(
+    `INSERT INTO glucose_logs (user_id, glucose_level, logged_date, logged_time)
+     VALUES ($1, $2, $3, $4)`,
+    [req.user.id, glucose_level, loggedDate, loggedTime]
+  );
 
-  const {
-    loggedAtText,
-    loggedDate,
-    loggedTime,
-  } = splitLoggedAt(logged_at);
-
-  await pool
-    .request()
-    .input('user_id', sql.Int, req.user.id)
-    .input('glucose_level', sql.Float, glucose_level)
-    .input('logged_date', sql.Date, loggedDate)
-    .input('logged_time', sql.Time, buildSqlTimeValue(loggedTime))
-    .query(`
-      INSERT INTO GlucoseLogs (
-        user_id,
-        glucose_level,
-        logged_date,
-        logged_time
-      )
-      VALUES (
-        @user_id,
-        @glucose_level,
-        @logged_date,
-        @logged_time
-      )
-    `);
-
-  return res.status(201).json({
-    message: 'Glucose logged',
-    logged_at: loggedAtText,
-  });
+  return res.status(201).json({ message: 'Glucose logged', logged_at: loggedAtText });
 });
 
+// ── GET GLUCOSE ───────────────────────────────────────────────────────────────
 exports.getGlucose = asyncHandler(async (req, res) => {
   const { date } = req.query;
 
@@ -147,39 +91,33 @@ exports.getGlucose = asyncHandler(async (req, res) => {
     throw err;
   }
 
-  await poolConnect;
-
-  let query = `
+  let queryText = `
     SELECT
       id,
       user_id,
       glucose_level,
-      CONVERT(varchar(10), logged_date, 23) AS logged_date,
-      CONVERT(varchar(8), logged_time, 108) AS logged_time,
-      CONCAT(
-        CONVERT(varchar(10), logged_date, 23),
-        'T',
-        CONVERT(varchar(8), logged_time, 108)
-      ) AS logged_at
-    FROM GlucoseLogs
-    WHERE user_id = @user_id
+      TO_CHAR(logged_date, 'YYYY-MM-DD') AS logged_date,
+      TO_CHAR(logged_time, 'HH24:MI:SS') AS logged_time,
+      TO_CHAR(logged_date, 'YYYY-MM-DD') || 'T' || TO_CHAR(logged_time, 'HH24:MI:SS') AS logged_at
+    FROM glucose_logs
+    WHERE user_id = $1
   `;
 
-  const request = pool.request()
-    .input('user_id', sql.Int, req.user.id);
+  const params = [req.user.id];
 
   if (date) {
-    query += ' AND logged_date = @date';
-    request.input('date', sql.Date, date);
+    params.push(date);
+    queryText += ` AND logged_date = $${params.length}`;
+    queryText += ` ORDER BY logged_date ASC, logged_time ASC`;
+  } else {
+    queryText += ` ORDER BY logged_date DESC, logged_time DESC`;
   }
 
-  query += ' ORDER BY logged_date ASC, logged_time ASC';
-
-  const result = await request.query(query);
-
-  return res.json(result.recordset);
+  const result = await pool.query(queryText, params);
+  return res.json(result.rows);
 });
 
+// ── GET GLUCOSE AVERAGES ──────────────────────────────────────────────────────
 exports.getGlucoseAverages = asyncHandler(async (req, res) => {
   const days = Number(req.query.days || 14);
 
@@ -189,31 +127,17 @@ exports.getGlucoseAverages = asyncHandler(async (req, res) => {
     throw err;
   }
 
-  await poolConnect;
+  const today              = new Date();
+  const startDate          = shiftLocalDate(today, -(days - 1));
+  const startDateValue     = formatLocalDate(startDate);
+  const endDateValue       = formatLocalDate(today);
+  const prevStartDateValue = formatLocalDate(shiftLocalDate(startDate, -days));
+  const prevEndDateValue   = formatLocalDate(shiftLocalDate(startDate, -1));
 
-  const today = new Date();
-
-  const startDate = shiftLocalDate(today, -(days - 1));
-
-  const startDateValue = formatLocalDate(startDate);
-  const endDateValue = formatLocalDate(today);
-
-  const previousStartDateValue = formatLocalDate(
-    shiftLocalDate(startDate, -days)
-  );
-
-  const previousEndDateValue = formatLocalDate(
-    shiftLocalDate(startDate, -1)
-  );
-
-  const [
-    settings,
-    glucoseRows,
-    previousGlucoseRows,
-  ] = await Promise.all([
+  const [settings, glucoseRows, previousGlucoseRows] = await Promise.all([
     loadSettings(req.user.id),
     loadGlucoseRange(req.user.id, startDateValue, endDateValue),
-    loadGlucoseRange(req.user.id, previousStartDateValue, previousEndDateValue),
+    loadGlucoseRange(req.user.id, prevStartDateValue, prevEndDateValue),
   ]);
 
   if (!settings) {
@@ -222,36 +146,16 @@ exports.getGlucoseAverages = asyncHandler(async (req, res) => {
     throw err;
   }
 
-  const intervals = calculateTimeOfDayAverages(
-    glucoseRows,
-    settings
-  );
-
-  const metrics = calculateClinicalMetrics(
-    glucoseRows,
-    settings
-  );
-
-  const previousMetrics = calculateClinicalMetrics(
-    previousGlucoseRows,
-    settings
-  );
-
-  const trendComparison = compareMetrics(
-    metrics,
-    previousMetrics
-  );
-
-  const dataQuality = assessDataQuality(
-    glucoseRows,
-    startDateValue,
-    endDateValue
-  );
+  const intervals       = calculateTimeOfDayAverages(glucoseRows, settings);
+  const metrics         = calculateClinicalMetrics(glucoseRows, settings);
+  const previousMetrics = calculateClinicalMetrics(previousGlucoseRows, settings);
+  const trendComparison = compareMetrics(metrics, previousMetrics);
+  const dataQuality     = assessDataQuality(glucoseRows, startDateValue, endDateValue);
 
   return res.json({
     days,
     startDate: startDateValue,
-    endDate: endDateValue,
+    endDate:   endDateValue,
     intervals,
     metrics,
     previousMetrics,
@@ -260,6 +164,7 @@ exports.getGlucoseAverages = asyncHandler(async (req, res) => {
   });
 });
 
+// ── GET GLUCOSE INSIGHTS ──────────────────────────────────────────────────────
 exports.getGlucoseInsights = asyncHandler(async (req, res) => {
   const days = Number(req.query.days || 30);
 
@@ -269,27 +174,16 @@ exports.getGlucoseInsights = asyncHandler(async (req, res) => {
     throw err;
   }
 
-  await poolConnect;
+  const today              = new Date();
+  const startDate          = shiftLocalDate(today, -(days - 1));
+  const startDateValue     = formatLocalDate(startDate);
+  const endDateValue       = formatLocalDate(today);
+  const insulinStartValue  = formatLocalDate(shiftLocalDate(startDate, -1));
 
-  const today = new Date();
-
-  const startDate = shiftLocalDate(today, -(days - 1));
-
-  const startDateValue = formatLocalDate(startDate);
-  const endDateValue = formatLocalDate(today);
-
-  const insulinStartDateValue = formatLocalDate(
-    shiftLocalDate(startDate, -1)
-  );
-
-  const [
-    settings,
-    glucoseRows,
-    insulinRows,
-  ] = await Promise.all([
+  const [settings, glucoseRows, insulinRows] = await Promise.all([
     loadSettings(req.user.id),
     loadGlucoseRange(req.user.id, startDateValue, endDateValue),
-    loadInsulinRange(req.user.id, insulinStartDateValue, endDateValue),
+    loadInsulinRange(req.user.id, insulinStartValue, endDateValue),
   ]);
 
   if (!settings) {
@@ -298,56 +192,25 @@ exports.getGlucoseInsights = asyncHandler(async (req, res) => {
     throw err;
   }
 
-  const targetMin = Number(settings.target_min);
-  const targetMax = Number(settings.target_max);
+  const targetMin      = Number(settings.target_min);
+  const targetMax      = Number(settings.target_max);
   const correctionRatio = Number(settings.correction_ratio);
 
   if (!Number.isFinite(targetMin) || !Number.isFinite(targetMax)) {
-    const err = new Error(
-      'Your target range settings must be valid numbers'
-    );
-
+    const err = new Error('Your target range settings must be valid numbers');
     err.status = 400;
     throw err;
   }
 
   if (!Number.isFinite(correctionRatio) || correctionRatio <= 0) {
-    const err = new Error(
-      'Your correction ratio setting must be greater than zero'
-    );
-
+    const err = new Error('Your correction ratio setting must be greater than zero');
     err.status = 400;
     throw err;
   }
 
-  const insights = buildPatternInsights({
-    glucoseReadings: glucoseRows,
-    insulinLogs: insulinRows,
-    settings,
-    analysisDays: days,
-    endDate: endDateValue,
-  });
+  const insights   = buildPatternInsights({ glucoseReadings: glucoseRows, insulinLogs: insulinRows, settings, analysisDays: days, endDate: endDateValue });
+  const prediction = buildGlucosePrediction({ glucoseReadings: glucoseRows, insulinLogs: insulinRows, settings, atTime: new Date() });
+  const dataQuality = assessDataQuality(glucoseRows, startDateValue, endDateValue);
 
-  const prediction = buildGlucosePrediction({
-    glucoseReadings: glucoseRows,
-    insulinLogs: insulinRows,
-    settings,
-    atTime: new Date(),
-  });
-
-  const dataQuality = assessDataQuality(
-    glucoseRows,
-    startDateValue,
-    endDateValue
-  );
-
-  return res.json({
-    days,
-    startDate: startDateValue,
-    endDate: endDateValue,
-    insights,
-    prediction,
-    dataQuality,
-  });
+  return res.json({ days, startDate: startDateValue, endDate: endDateValue, insights, prediction, dataQuality });
 });
-
