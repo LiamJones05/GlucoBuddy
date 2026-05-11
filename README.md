@@ -217,8 +217,6 @@ GlucoBuddy/
     server.js
     schema.sql
 
-  Design/
-  Problems-Queue/
 ```
 
 ---
@@ -406,7 +404,6 @@ Planned deployment architecture includes:
 Planned future improvements include:
 
 - Push notifications
-- Offline-first support
 - CGM integrations
 - Improved explainability
 - Expanded analytics
