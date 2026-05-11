@@ -1,172 +1,474 @@
 # GlucoBuddy
 
-## Introduction
-GlucoBuddy is a full-stack web application designed to assist individuals with diabetes in managing their blood glucose levels, insulin dosing, and dietary intake. The system provides users with tools to log glucose readings, track insulin usage, record meals, and calculate recommended insulin doses based on personalised settings.
+## Modern Diabetes Management Platform
 
-The application consists of:
-- A **React frontend** for user interaction
-- A **Node.js/Express backend** for API logic
-- A **SQL Server database** for persistent storage
+GlucoBuddy is a full-stack diabetes management web application focused on glucose tracking, insulin dose calculation, analytics, adaptive recommendations, and long-term diabetes insights.
+
+The project is designed as a mobile-first Progressive Web Application (PWA) with a modern React frontend, Node.js backend, and PostgreSQL persistence layer.
 
 ---
 
-## Aims and Objectives
+## Screenshots
 
-### Aim
-To design and develop a comprehensive diabetes management system that supports accurate insulin dose calculations and effective data tracking.
-
-### Objectives
-- Implement secure user authentication using JWT
-- Store and manage user-specific medical settings
-- Enable logging of:
-  - Blood glucose levels
-  - Insulin doses
-  - Meals (carbohydrates and protein)
-- Develop an insulin dose calculator based on:
-  - Blood glucose levels
-  - Carbohydrate intake
-  - User-specific insulin-to-carb ratios
-  - Correction factors
-  - Insulin-on-board (IOB)
-- Visualise health data for improved decision-making
+> UI screenshots and demos coming soon.
 
 ---
 
-## Key Features
+# Features
 
-- User authentication (register/login)
-- Personalised diabetes settings
-- Glucose tracking
-- Insulin logging
-- Meal tracking
-- Intelligent insulin dose calculator
-- Data visualisation (planned)
+## Authentication & User Management
+
+- JWT-based authentication
+- Secure password hashing with bcrypt
+- Protected application routes
+- Account deletion flow with password verification
+- Rate-limited authentication endpoints
+- Personalized diabetes settings per user
 
 ---
 
-## Technology Stack
+## Glucose Logging
 
-### Frontend
-- React (Vite)
+- Log glucose readings with date and time
+- Daily glucose history review
+- Interactive glucose charting
+- Target range overlays
+- Combined glucose and insulin review views
+
+---
+
+## Insulin Logging
+
+- Log insulin doses and insulin type
+- Time-based insulin history
+- Confirm administered recommendations
+- Optional glucose logging during insulin confirmation
+
+---
+
+## Insulin Dose Calculator
+
+The insulin recommendation engine supports:
+
+- Carbohydrate coverage
+- Correction insulin
+- Insulin on board (IOB)
+- Protein adjustments
+- Fat adjustments
+- Alcohol reductions
+- Exercise reductions
+- Time-of-day insulin sensitivity
+- CGM trend adjustments
+
+### Supported CGM Trends
+
+| Trend | Adjustment |
+|---|---|
+| Rising fast | +20% |
+| Rising slowly | +10% |
+| Steady | No adjustment |
+| Falling slowly | -10% |
+| Falling fast | -20% |
+
+### Safety Behaviors
+
+- Hypoglycemia protection below 4.0 mmol/L
+- Dose clamping to prevent negative insulin values
+- Conservative rounding to nearest 0.5 units
+- IOB applied only to correction insulin
+- Safety-focused recommendation wording
+
+---
+
+## Analytics Dashboard
+
+- 14-day, 30-day, and 90-day analytics windows
+- Average glucose tracking
+- Time-in-range analysis
+- Time-above-range analysis
+- Time-below-range analysis
+- Standard deviation
+- Coefficient of variation
+- Clinical status indicators
+- Comparative trend analysis
+- Time-of-day glucose averages
+- Data quality warnings
+- Pattern-based insights
+- Short-term glucose prediction
+
+---
+
+## Pattern-Based Insights
+
+The insight engine identifies recurring glucose and insulin patterns including:
+
+- Time-of-day highs
+- Time-of-day lows
+- Post-insulin low patterns
+- Weak correction patterns
+- Frequent hyperglycemia patterns
+- Significant time-of-day deviation
+
+Insights include:
+- Confidence indicators
+- Supporting event counts
+- Trend summaries
+
+---
+
+## Adaptive Insulin Recommendation Engine
+
+GlucoBuddy includes an optional adaptive recommendation system designed to conservatively tune insulin parameters over time.
+
+### Adaptive System Features
+
+- Exponential moving average updates
+- Minimum evidence thresholds
+- Dead-band stabilization logic
+- Bounded parameter drift
+- Separate morning/afternoon/evening adaptation
+- Hypoglycemia learning freeze protection
+- User-controlled enable/disable support
+- Adaptive parameter reset support
+
+### Adaptive Safety Positioning
+
+Adaptive recommendations are:
+- Optional
+- User-controlled
+- Conservative
+- Relative to user-configured baselines
+
+The system is designed as educational decision-support tooling and not autonomous medical treatment software.
+
+---
+
+## Clinical PDF Reports
+
+- Generate downloadable clinical summary reports
+- Configurable date ranges
+- Trend chart generation
+- Analytics summaries
+- Insight summaries
+- Episode summaries
+
+---
+
+## Backup & Restore
+
+- Export complete user data to JSON
+- Import preview support
+- Full data restore workflows
+- Transactional replacement handling
+- User confirmation safeguards
+
+---
+
+# Technology Stack
+
+## Frontend
+
+- React 19
+- Vite
 - React Router
+- Axios
+- Recharts
+- Framer Motion
+- Lucide React
 
-### Backend
+## Backend
+
 - Node.js
-- Express.js
-- JWT Authentication
-- bcrypt (password hashing)
-- zod (centralised validation)
+- Express 5
+- PostgreSQL (`pg`)
+- JWT authentication
+- bcrypt
+- zod validation
+- express-rate-limit
 
-### Database
-- Microsoft SQL Server
+## Database
 
----
-
-## System Architecture
-
-```
-Frontend (React)
-      ↓
-Backend API (Express)
-      ↓
-SQL Server Database
-```
+- PostgreSQL
 
 ---
 
-## Database Overview
+# Architecture
 
-Main tables:
-- Users
-- UserSettings
-- GlucoseLogs
-- InsulinLogs
-- DoseCalculations
-- InsulinActivity
+## Repository Structure
 
----
+```text
+GlucoBuddy/
+  glucobuddy-frontend/
+    src/
+      api/
+      components/
+      pages/
+      styles/
+      utils/
 
-## Insulin Dose Calculation Logic
+  glucobuddy-backend/
+    controllers/
+    middleware/
+    routes/
+    services/
+    utils/
+    validators/
+    db.js
+    server.js
+    schema.sql
 
-The system calculates insulin dosage using:
-
-```
-Total Dose = Carb Dose + Correction Dose - Insulin On Board (IOB)
-```
-
-### Components:
-- **Carb Dose** = Carbohydrates / Insulin-to-carb ratio
-- **Correction Dose** = (Current glucose - target max) / correction factor
-- **IOB** = Remaining active insulin from previous doses
-
-Safety constraints:
-- No negative doses
-- Optional rounding to nearest 0.5 units
-
----
-
-## Setup Instructions
-
-### 1. Clone the repository
-```
-git clone <your-repo-url>
+  Design/
+  Problems-Queue/
 ```
 
 ---
 
-### 2. Backend Setup
-```
-cd glucobuddy-backend
-npm install
-npm run dev
-```
+# Frontend Architecture
 
-Create a `.env` file:
-```
-DB_USER=your_user
-DB_PASSWORD=your_password
-DB_SERVER=localhost
-DB_DATABASE=GlucoBuddyData
-DB_PORT=1433
-JWT_SECRET=your_secret
-```
+The frontend is a React single-page application using React Router for routing and Framer Motion for animated transitions.
+
+## Public Routes
+
+- `/`
+- `/register`
+- `/terms`
+- `/privacy`
+
+## Protected Routes
+
+- `/analytics`
+- `/log-glucose`
+- `/calculator`
+- `/settings`
+
+Authentication-aware routing is handled through reusable route wrappers:
+
+- `PublicRoute.jsx`
+- `ProtectedLayout.jsx`
 
 ---
 
-### 3. Frontend Setup
-```
+# Backend Architecture
+
+The backend uses a layered route/controller/service architecture.
+
+## Route Groups
+
+- `/api/auth`
+- `/api/settings`
+- `/api/glucose`
+- `/api/insulin`
+- `/api/meals`
+- `/api/dose`
+- `/api/reports`
+- `/api/data`
+- `/api/adaptive`
+
+## Service Layer
+
+The backend service layer includes:
+
+- `doseEngine.js`
+- `iobEngine.js`
+- `metricsEngine.js`
+- `insightEngine.js`
+- `predictionEngine.js`
+- `adaptiveEngine.js`
+- `outcomeTracker.js`
+
+---
+
+# Database Model
+
+Core tables include:
+
+- `users`
+- `user_settings`
+- `glucose_logs`
+- `insulin_logs`
+- `meal_logs`
+- `dose_calculations`
+
+The database includes:
+- user-owned relational data
+- indexed date lookups
+- adaptive-learning fields
+- outcome-tracking support
+
+---
+
+# API Overview
+
+## Auth
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `DELETE /api/auth/account`
+
+## Settings
+
+- `GET /api/settings`
+- `PUT /api/settings`
+
+## Glucose
+
+- `POST /api/glucose`
+- `GET /api/glucose`
+- `GET /api/glucose/averages`
+- `GET /api/glucose/insights`
+
+## Insulin
+
+- `POST /api/insulin`
+- `GET /api/insulin`
+
+## Meals
+
+- `POST /api/meals`
+- `GET /api/meals`
+
+## Dose
+
+- `POST /api/dose/calculate`
+
+## Reports
+
+- `GET /api/reports/summary`
+
+## Data Portability
+
+- `GET /api/data/export`
+- `POST /api/data/preview`
+- `POST /api/data/import`
+
+## Adaptive
+
+- `GET /api/adaptive/params`
+- `GET /api/adaptive/pending`
+- `POST /api/adaptive/outcome`
+- `POST /api/adaptive/toggle`
+- `POST /api/adaptive/reset`
+
+---
+
+# Development Roadmap
+
+Current roadmap focus areas include:
+
+- Production hardening
+- Clinical safety testing
+- Adaptive engine testing
+- Infrastructure and deployment
+- Dockerization
+- CI/CD
+- Authentication improvements
+- Accessibility improvements
+- PWA support
+- Offline support
+- External CGM integrations
+
+---
+
+# Security & Safety Notes
+
+GlucoBuddy is designed as an educational diabetes-management support platform.
+
+Important:
+- Dose recommendations are estimates only
+- Users should always verify recommendations independently
+- Insulin ratios should be determined with healthcare professional guidance
+- The application may produce incorrect calculations or predictions
+- Users should consult healthcare professionals before making treatment decisions
+
+Adaptive recommendations are disabled by default and require explicit user opt-in.
+
+---
+
+# Planned Infrastructure
+
+Planned deployment architecture includes:
+
+- React frontend
+- Node.js API backend
+- PostgreSQL database
+- Dockerized deployment
+- Nginx reverse proxy
+- HTTPS support
+- Automated backups
+- CI/CD pipelines
+- Monitoring and observability
+
+---
+
+# Future Goals
+
+Planned future improvements include:
+
+- Push notifications
+- Offline-first support
+- CGM integrations
+- Improved explainability
+- Expanded analytics
+- Session management
+- Refresh token authentication
+- Accessibility improvements
+- Advanced insight systems
+
+---
+
+# Local Development
+
+## Frontend
+
+```bash
 cd glucobuddy-frontend
 npm install
 npm run dev
 ```
 
----
+## Backend
 
-### 4. Access the App
+```bash
+cd glucobuddy-backend
+npm install
+npm run dev
 ```
-Frontend: http://localhost:5173
-Backend: http://localhost:3000
+
+---
+
+# Environment Variables
+
+Example backend environment variables:
+
+```env
+PORT=
+JWT_SECRET=
+
+DB_USER=
+DB_PASSWORD=
+DB_HOST=
+DB_DATABASE=
+DB_PORT=
+DB_SSL=
 ```
 
 ---
 
-## Future Improvements
+# Status
 
-- Advanced insulin-on-board modelling
-- Graph visualisation (glucose & insulin trends)
-- Mobile responsiveness
-- Notifications and alerts
-- Integration with wearable devices
+GlucoBuddy is currently in active development and progressing toward production readiness.
 
----
-
-## Conclusion
-
-GlucoBuddy provides a structured and extensible platform for diabetes management, combining data tracking with intelligent insulin calculation. The system demonstrates full-stack development principles and real-world application of database design, API development, and frontend engineering.
+Current focus areas:
+- testing
+- deployment hardening
+- infrastructure
+- authentication improvements
+- operational reliability
 
 ---
 
-## Author
-Liam Jones
+# License
 
-3rd Year Computer Science Student
+License to be determined.
+
