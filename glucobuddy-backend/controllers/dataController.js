@@ -1,11 +1,11 @@
 const { pool } = require('../db');
 const asyncHandler = require('../utils/asyncHandler');
 
-function splitDateTime(isoString) {
-  const date = new Date(isoString);
+function splitDateTime(dateTimeString) {
+  const [date, time] = dateTimeString.split('T');
   return {
-    date: date.toISOString().slice(0, 10),
-    time: date.toISOString().slice(11, 19),
+    date,
+    time: time.slice(0, 8),
   };
 }
 
@@ -32,13 +32,13 @@ exports.exportUserData = asyncHandler(async (req, res) => {
 
   const glucoseLogs = glucose.rows.map((g) => ({
     glucose_level: Number(g.glucose_level),
-    logged_at:     `${g.logged_date}T${g.logged_time}`,
+    logged_at: `${String(g.logged_date).slice(0, 10)}T${g.logged_time}`,
   }));
 
   const insulinLogs = insulin.rows.map((i) => ({
-    units:        Number(i.units),
+    units: Number(i.units),
     insulin_type: i.insulin_type,
-    logged_at:    `${i.logged_date}T${i.logged_time}`,
+    logged_at: `${String(i.logged_date).slice(0, 10)}T${i.logged_time}`,
   }));
 
   const mealLogs = meals.rows.map((m) => ({

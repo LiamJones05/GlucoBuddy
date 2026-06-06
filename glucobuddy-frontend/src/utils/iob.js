@@ -80,6 +80,10 @@ export function buildIobSeries(insulinLogs, selectedDate) {
     minutePoints.add(windowStartMinutes);
     minutePoints.add(windowEndMinutes);
 
+    if (windowEndMinutes < DAY_END_MINUTES){
+      minutePoints.add(Math.min(DAY_END_MINUTES, windowEndMinutes + 1));
+    }
+
     for (let minute = intervalStart; minute <= windowEndMinutes; minute += IOB_INTERVAL_MINUTES) {
       minutePoints.add(minute);
     }
@@ -112,7 +116,7 @@ export function buildChartData(glucoseData, insulinLogs, selectedDate) {
     chartPoints.set(entry.minutesSinceMidnight, {
       ...chartPoints.get(entry.minutesSinceMidnight),
       minutesSinceMidnight: entry.minutesSinceMidnight,
-      iob: entry.iob,
+      iob: entry.iob ?? 0,
     });
   });
 

@@ -213,7 +213,7 @@ export default function GlucoseChart({ data, selectedDate, targetMin, targetMax 
               stroke="#f59e0b"
               strokeWidth={2}
               dot={false}
-              connectNulls
+              connectNulls={false}
             />
           ) : null}
         </LineChart>
