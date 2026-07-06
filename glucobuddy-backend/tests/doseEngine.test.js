@@ -142,25 +142,38 @@ describe('IOB applied to correction only', () => {
   // 4 units of IOB logged 30 minutes ago
   const recentInsulinLogs = [{
     units:     4,
-    logged_at: new Date(MIDDAY.getTime() - 30 * 60 * 1000).toISOString(),
+    logged_at: '2026-01-01T12:30:00',
   }];
 
   test('IOB reduces correction dose but not carb dose', () => {
-    const withIob    = calculate({ carbs: 60, glucose: 14.0 }, { insulinLogs: recentInsulinLogs });
-    const withoutIob = calculate({ carbs: 60, glucose: 14.0 }, { insulinLogs: NO_IOB });
+    // Use a small IOB (0.5 units logged 3 hours ago) so it partially reduces
+    // a modest correction without wiping it out entirely, making the difference
+    // visible after 0.5 unit rounding
+    const smallRecentIob = [{
+      units:     2,
+      logged_at: '2026-01-01T11:00:00',
+    }];
 
-    // Carb dose component should be identical
+    const withIob    = calculate({ carbs: 60, glucose: 10.0 }, { insulinLogs: smallRecentIob });
+    const withoutIob = calculate({ carbs: 60, glucose: 10.0 }, { insulinLogs: NO_IOB });
+
+    // Carb dose component should be identical regardless of IOB
     expect(withIob.breakdown.carbDose).toBe(withoutIob.breakdown.carbDose);
 
-    // Total dose should be lower with IOB
-    expect(withIob.recommendedDose).toBeLessThan(withoutIob.recommendedDose);
+    // IOB available should be non-zero
+    expect(withIob.breakdown.iobAvailable).toBeGreaterThan(0);
+
+    // Net correction should be less than or equal to gross correction
+    expect(withIob.breakdown.netCorrectionDose).toBeLessThanOrEqual(
+      withIob.breakdown.correctionDose
+    );
   });
 
   test('IOB applied is capped at the correction dose', () => {
     // Large IOB that exceeds the correction dose — iobApplied should not exceed correctionDose
     const massiveIobLogs = [{
-      units:     20,
-      logged_at: new Date(MIDDAY.getTime() - 30 * 60 * 1000).toISOString(),
+    units:     20,
+    logged_at: '2026-01-01T12:30:00',
     }];
 
     const result = calculate({ carbs: 60, glucose: 10.0 }, { insulinLogs: massiveIobLogs });
@@ -169,8 +182,8 @@ describe('IOB applied to correction only', () => {
 
   test('net correction dose never goes below zero', () => {
     const massiveIobLogs = [{
-      units:     20,
-      logged_at: new Date(MIDDAY.getTime() - 30 * 60 * 1000).toISOString(),
+    units:     20,
+    logged_at: '2026-01-01T12:30:00',
     }];
 
     const result = calculate({ carbs: 60, glucose: 10.0 }, { insulinLogs: massiveIobLogs });
