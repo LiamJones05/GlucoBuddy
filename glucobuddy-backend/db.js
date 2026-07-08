@@ -1,4 +1,10 @@
-require('dotenv').config();
+const dotenv = require('dotenv');
+
+dotenv.config({
+  path: process.env.NODE_ENV === 'test'
+    ? '.env.test'
+    : '.env'
+});
 const { Pool } = require('pg');
 
 const requiredEnvVars = [
@@ -28,9 +34,10 @@ pool.on('error', (err) => {
   console.error('Unexpected database error:', err);
 });
 
-// Verify connection on startup
-pool.query('SELECT 1').catch((err) => {
-  console.error('Database connection failed:', err);
-});
+if (process.env.NODE_ENV !== 'test') {
+  pool.query('SELECT 1').catch((err) => {
+    console.error('Database connection failed:', err);
+  });
+}
 
 module.exports = { pool };

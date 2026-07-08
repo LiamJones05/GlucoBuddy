@@ -6,81 +6,106 @@ Implement end-to-end API integration tests using Jest and Supertest to
 verify routing, middleware, authentication, controllers, database
 interaction and HTTP responses.
 
-## Phase 1 -- Project Setup
+------------------------------------------------------------------------
 
--   Install Supertest (`npm install --save-dev supertest`)
--   Split Express into `app.js` (exports app) and `server.js` (starts
-    server)
--   Create a dedicated PostgreSQL test database
--   Run migrations against the test database only
+# Progress
 
-## Phase 2 -- Test Infrastructure
+## ✅ Phase 1 --- Project Setup (Complete)
 
--   Configure Jest helpers
--   Add database cleanup before each test
--   Create reusable authentication helpers
--   Create reusable seed functions
+-   [x] Installed Supertest
+-   [x] Split Express into `app.js` and `server.js`
+-   [x] Created dedicated PostgreSQL test database (`glucobuddy_test`)
+-   [x] Created `.env.test`
+-   [x] Configured environment switching via `NODE_ENV`
+-   [x] Configured Jest for the test environment
+-   [x] Verified API startup
 
-## Phase 3 -- Authentication
+## ✅ Phase 2 --- Test Infrastructure (Complete)
 
-Create `tests/auth.api.test.js` - Register - Login - Duplicate email -
-Invalid password - JWT protection - Missing fields
+-   [x] Added `tests/setup.js`
+-   [x] Automatic database cleanup before every test
+-   [x] Switched cleanup to `TRUNCATE ... RESTART IDENTITY CASCADE`
+-   [x] Graceful PostgreSQL shutdown after tests
+-   [x] Created first integration test (`health.test.js`)
+-   [x] Existing unit tests still passing (88/88)
 
-## Phase 4 -- Glucose API
+------------------------------------------------------------------------
 
-Create `tests/glucose.api.test.js` - Create log - Retrieve logs - Delete
-log - Invalid values - Authentication required
+# Remaining Work
 
-## Phase 5 -- Insulin API
+## ⏳ Phase 3 --- Authentication API
 
-Create `tests/insulin.api.test.js` - Create log - Retrieve logs - Delete
-log - Validation - Authentication
+-   Register
+-   Duplicate email
+-   Validation
+-   Login
+-   JWT authentication
+-   `/api/auth/me`
+-   Delete account
 
-## Phase 6 -- Settings API
+## ⏳ Phase 4 --- Glucose API
 
-Create `tests/settings.api.test.js` - Get settings - Update settings -
-Invalid ratios - Invalid targets
+-   CRUD
+-   Validation
+-   Authentication
 
-## Phase 7 -- Dose API
+## ⏳ Phase 5 --- Insulin API
 
-Create `tests/dose.api.test.js` - Calculate recommendation - Invalid
-input - Uses user settings - Authentication
+-   CRUD
+-   Validation
+-   Authentication
 
-## Phase 8 -- Adaptive API
+## ⏳ Phase 6 --- Settings API
 
-Create `tests/adaptive.api.test.js` - Toggle adaptive mode - Get
-adaptive parameters - Reset adaptive parameters - Submit outcome -
-Pending outcome endpoint
+-   Get/update settings
+-   Validation
 
-## Phase 9 -- Data API
+## ⏳ Phase 7 --- Dose API
 
-Create `tests/data.api.test.js` - Export backup - Import backup -
-Preview import - Reject malformed data
+-   Recommendation endpoint
+-   Validation
+-   Authentication
 
-## Phase 10 -- Reports API
+## ⏳ Phase 8 --- Adaptive API
 
-Create `tests/reports.api.test.js` - Generate report - Empty dataset -
-Authentication
+-   Toggle
+-   Get params
+-   Submit outcome
+-   Reset
+-   Pending outcome
 
-## Success Criteria
+## ⏳ Phase 9 --- Data API
+
+-   Export
+-   Import
+-   Preview
+-   Malformed backup
+
+## ⏳ Phase 10 --- Reports API
+
+-   Report generation
+-   Empty datasets
+-   Authentication
+
+------------------------------------------------------------------------
+
+# Current Status
+
+  Area                               Status
+  ---------------------------------- ------------
+  Dose Engine Unit Tests             ✅
+  Adaptive Engine Unit Tests         ✅
+  Health Integration Test            ✅
+  Authentication Integration Tests   ⏳ Next
+  Remaining API Tests                ⏳ Pending
+
+------------------------------------------------------------------------
+
+# Success Criteria
 
 -   Dedicated test database
--   All protected routes tested
--   Validation covered
--   Happy-path and failure-path responses tested
--   Existing unit tests continue to pass
-
-## Suggested Order
-
--   [ ] Install Supertest
--   [ ] Split app/server
--   [ ] Configure test database
--   [ ] Configure Jest helpers
--   [ ] Authentication tests
--   [ ] Glucose API tests
--   [ ] Insulin API tests
--   [ ] Settings API tests
--   [ ] Dose API tests
--   [ ] Adaptive API tests
--   [ ] Data API tests
--   [ ] Report API tests
+-   Full endpoint coverage
+-   Authentication middleware tested
+-   Validation tested
+-   Success and failure paths tested
+-   CI-ready automated suite
