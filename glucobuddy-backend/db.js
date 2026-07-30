@@ -5,6 +5,8 @@ dotenv.config({
     ? '.env.test'
     : '.env'
 });
+
+
 const { Pool } = require('pg');
 
 const requiredEnvVars = [

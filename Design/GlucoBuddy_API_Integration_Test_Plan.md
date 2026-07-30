@@ -29,11 +29,9 @@ interaction and HTTP responses.
 -   [x] Created first integration test (`health.test.js`)
 -   [x] Existing unit tests still passing (88/88)
 
-------------------------------------------------------------------------
 
-# Remaining Work
 
-## ⏳ Phase 3 --- Authentication API
+## ✅ Phase 3 --- Authentication API
 
 -   Register
 -   Duplicate email
@@ -42,6 +40,10 @@ interaction and HTTP responses.
 -   JWT authentication
 -   `/api/auth/me`
 -   Delete account
+
+------------------------------------------------------------------------
+
+# Remaining Work
 
 ## ⏳ Phase 4 --- Glucose API
 
