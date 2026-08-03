@@ -93,10 +93,14 @@ export function buildIobSeries(insulinLogs, selectedDate) {
     .sort((a, b) => a - b)
     .map((minutesSinceMidnight) => {
       const atTime = new Date(dayStart.getTime() + (minutesSinceMidnight * 60000));
+      const activeIob = calculateInsulinOnBoard(insulinLogs, atTime);
 
       return {
         minutesSinceMidnight,
-        iob: Number(calculateInsulinOnBoard(insulinLogs, atTime).toFixed(2)),
+        // Recharts treats null as a break in a line. Leaving inactive points as
+        // zero joins one dose window to the next, visually implying active IOB
+        // between unrelated doses.
+        iob: activeIob > 0 ? Number(activeIob.toFixed(2)) : null,
       };
     });
 }
@@ -116,7 +120,7 @@ export function buildChartData(glucoseData, insulinLogs, selectedDate) {
     chartPoints.set(entry.minutesSinceMidnight, {
       ...chartPoints.get(entry.minutesSinceMidnight),
       minutesSinceMidnight: entry.minutesSinceMidnight,
-      iob: entry.iob ?? 0,
+      iob: entry.iob,
     });
   });
 
