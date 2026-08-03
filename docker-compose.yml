@@ -1,13 +1,7 @@
 services:
   postgres:
     image: postgres:17
-
-    env_file:
-
-      - .env.docker
-
     container_name: glucobuddy-db
-
     restart: unless-stopped
 
     environment:
@@ -20,6 +14,7 @@ services:
 
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres:/docker-entrypoint-initdb.d:ro
 
 volumes:
   postgres_data:

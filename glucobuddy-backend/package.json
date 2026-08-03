@@ -3,13 +3,22 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "cross-env NODE_ENV=test jest --runInBand",
-    "dev": "nodemon server.js",
-    "start": "node server.js",
-    "migrate:create": "node-pg-migrate create",
-    "migrate:up": "node-pg-migrate up",
-    "migrate:down": "node-pg-migrate down"
-  },
+  "test": "cross-env NODE_ENV=test jest --runInBand",
+
+  "dev": "nodemon server.js",
+  "start": "node server.js",
+
+  "migrate:create": "node-pg-migrate create",
+
+  "migrate:up": "node-pg-migrate up --envPath=.env",
+
+  "setup": "npm run migrate:up && npm run migrate:test",
+
+  "migrate:test": "node-pg-migrate up --envPath=.env.test",
+
+  "migrate:down": "node-pg-migrate down --envPath=.env"
+},
+
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -34,3 +43,4 @@
     "supertest": "^7.2.2"
   }
 }
+ 
