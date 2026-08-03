@@ -2,9 +2,9 @@
 
 ## Modern Diabetes Management Platform
 
-GlucoBuddy is a full-stack diabetes management web application focused on glucose tracking, insulin dose calculation, analytics, adaptive recommendations, and long-term diabetes insights.
+GlucoBuddy is a full-stack diabetes-management web application focused on glucose tracking, insulin dose calculation, analytics, adaptive recommendations, and long-term glucose insights.
 
-The project is designed as a mobile-first Progressive Web Application (PWA) with a modern React frontend, Node.js backend, and PostgreSQL persistence layer.
+The project is a mobile-first Progressive Web Application (PWA) with a React frontend, Node.js/Express API, and PostgreSQL persistence layer. It is educational decision-support software, not a replacement for clinical advice or treatment.
 
 ---
 
@@ -33,7 +33,8 @@ The project is designed as a mobile-first Progressive Web Application (PWA) with
 - Daily glucose history review
 - Interactive glucose charting
 - Target range overlays
-- Combined glucose and insulin review views
+- Combined glucose and insulin-on-board (IOB) review
+- Separate IOB chart segments for separated insulin-dose windows
 
 ---
 
@@ -76,6 +77,7 @@ The insulin recommendation engine supports:
 - Dose clamping to prevent negative insulin values
 - Conservative rounding to nearest 0.5 units
 - IOB applied only to correction insulin
+- Active IOB from overlapping doses is summed before being shown on the chart
 - Safety-focused recommendation wording
 
 ---
@@ -110,9 +112,11 @@ The insight engine identifies recurring glucose and insulin patterns including:
 - Significant time-of-day deviation
 
 Insights include:
+
+- High, moderate, or low risk categorisation
 - Confidence indicators
 - Supporting event counts
-- Trend summaries
+- Risk-first ordering, then confidence and recency
 
 ---
 
@@ -185,10 +189,13 @@ The system is designed as educational decision-support tooling and not autonomou
 - bcrypt
 - zod validation
 - express-rate-limit
+- Jest and Supertest integration testing
 
 ## Database
 
 - PostgreSQL
+- SQL schema and `node-pg-migrate` migrations
+- Indexed user/date query paths
 
 ---
 
@@ -208,15 +215,23 @@ GlucoBuddy/
 
   glucobuddy-backend/
     controllers/
+    migrations/
     middleware/
     routes/
     services/
+    tests/
     utils/
     validators/
     db.js
+    migration-config.js
     server.js
     schema.sql
 
+  docker/
+    postgres/
+      01-create-test-db.sh
+
+  docker-compose.yml
 ```
 
 ---
@@ -238,6 +253,8 @@ The frontend is a React single-page application using React Router for routing a
 - `/log-glucose`
 - `/calculator`
 - `/settings`
+
+`/dashboard` redirects to `/analytics`.
 
 Authentication-aware routing is handled through reusable route wrappers:
 
@@ -352,7 +369,7 @@ The database includes:
 
 # Development Roadmap
 
-Current roadmap focus areas include:
+The detailed current issue list is maintained in [ROADMAP.md](ROADMAP.md). Active themes include:
 
 - Production hardening
 - Clinical safety testing
@@ -383,19 +400,18 @@ Adaptive recommendations are disabled by default and require explicit user opt-i
 
 ---
 
-# Planned Infrastructure
+# Local Database Infrastructure
 
-Planned deployment architecture includes:
+Docker Compose currently runs PostgreSQL only; the frontend and API run directly with their npm scripts during development.
 
-- React frontend
-- Node.js API backend
-- PostgreSQL database
-- Dockerized deployment
-- Nginx reverse proxy
-- HTTPS support
-- Automated backups
-- CI/CD pipelines
-- Monitoring and observability
+On first initialisation of an empty `postgres_data` volume, Postgres creates:
+
+- The development database named by root `.env` → `DB_DATABASE`
+- A separate `glucobuddy_test` database via `docker/postgres/01-create-test-db.sh`
+
+The init script runs only for a new Postgres volume. Backend migrations then initialise the schemas in both databases. Keep the test database separate: the test suite truncates its tables before each test.
+
+Production application containers, reverse proxy/HTTPS, CI/CD, backups, and monitoring are not implemented yet.
 
 ---
 
@@ -416,7 +432,59 @@ Planned future improvements include:
 
 # Local Development
 
-## Frontend
+## Prerequisites
+
+- Node.js and npm
+- Docker and Docker Compose
+
+## 1. Configure environment files
+
+Create a root `.env` for Docker Compose:
+
+```env
+DB_USER=
+DB_PASSWORD=
+DB_DATABASE=
+```
+
+Create `glucobuddy-backend/.env` for the development API/database and `glucobuddy-backend/.env.test` for tests. The test file must use a distinct database:
+
+```env
+# glucobuddy-backend/.env.test
+DB_USER=
+DB_PASSWORD=
+DB_HOST=localhost
+DB_DATABASE=glucobuddy_test
+DB_PORT=5432
+DB_SSL=false
+JWT_SECRET=
+ALLOWED_ORIGINS=
+```
+
+`JWT_SECRET` must be a strong, unique secret outside source control. `ALLOWED_ORIGINS` is a comma-separated list of browser origins allowed to call the API.
+
+## 2. Start PostgreSQL
+
+From the repository root:
+
+```bash
+docker compose up -d
+```
+
+For a newly created Docker volume, this creates the development database and `glucobuddy_test`. Do not point test configuration at the development database.
+
+## 3. Set up the backend
+
+```bash
+cd glucobuddy-backend
+npm install
+npm run setup
+npm run dev
+```
+
+`npm run setup` applies migrations to both the development and test databases. Use `npm run migrate:up` or `npm run migrate:test` to target one database.
+
+## 4. Start the frontend
 
 ```bash
 cd glucobuddy-frontend
@@ -424,48 +492,50 @@ npm install
 npm run dev
 ```
 
-## Backend
+## Tests and checks
+
+Backend integration and engine tests require the Docker test database:
 
 ```bash
 cd glucobuddy-backend
-npm install
-npm run dev
+npm test
 ```
+
+Frontend IOB regression tests and the production build can be run with:
+
+```bash
+cd glucobuddy-frontend
+npm test
+npm run build
+npm run lint
+```
+
+---
+
+# API Health Check
+
+With the backend running, `GET /` returns a simple API-status response.
 
 ---
 
 # Environment Variables
 
-Example backend environment variables:
-
-```env
-PORT=
-JWT_SECRET=
-
-DB_USER=
-DB_PASSWORD=
-DB_HOST=
-DB_DATABASE=
-DB_PORT=
-DB_SSL=
-```
+Environment files are intentionally excluded from version control. See the Local Development section for the required root Compose variables and backend test variables. The backend development `.env` uses the same database fields, plus `PORT`, `JWT_SECRET`, and `ALLOWED_ORIGINS`.
 
 ---
 
 # Status
 
-GlucoBuddy is currently in active development and progressing toward production readiness.
+GlucoBuddy is in active development and is not production-ready.
 
-Current focus areas:
-- testing
-- deployment hardening
-- infrastructure
-- authentication improvements
-- operational reliability
+Current verification status:
+
+- Backend: 12 Jest suites and 178 tests passing
+- Frontend: IOB regression tests and production build passing
+- Frontend lint: known outstanding lint errors remain
 
 ---
 
 # License
 
 License to be determined.
-
