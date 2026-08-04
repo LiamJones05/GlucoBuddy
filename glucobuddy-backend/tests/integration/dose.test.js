@@ -5,6 +5,7 @@ const {
   createAuthenticatedUser,
   insertInsulin,
   pool,
+  toBrowserPayload,
 } = require('./helpers');
 
 describe('Dose Calculation API', () => {
@@ -22,11 +23,11 @@ describe('Dose Calculation API', () => {
       const response = await request(app)
         .post('/api/dose/calculate')
         .set(authHeader(token))
-        .send({
+        .send(toBrowserPayload({
           glucose: 5.5,
           carbs: 50,
           calculation_time: '2026-01-15T08:00:00',
-        });
+        }));
 
       expect(response.status).toBe(200);
       expect(response.body.recommendedDose).toBe(5);
@@ -107,7 +108,7 @@ describe('Dose Calculation API', () => {
       const response = await request(app)
         .post('/api/dose/calculate')
         .set(authHeader(token))
-        .send({
+        .send(toBrowserPayload({
           glucose: 8,
           carbs: 40,
           protein_grams: 30,
@@ -115,7 +116,7 @@ describe('Dose Calculation API', () => {
           recent_exercise_minutes: 30,
           planned_exercise_minutes: 30,
           calculation_time: '2026-01-15T18:30:00',
-        });
+        }));
 
       expect(response.status).toBe(200);
       expect(response.body.advancedUsed).toBe(true);
@@ -193,4 +194,3 @@ describe('Dose Calculation API', () => {
     });
   });
 });
-

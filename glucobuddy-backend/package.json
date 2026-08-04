@@ -3,22 +3,15 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-  "test": "cross-env NODE_ENV=test jest --runInBand",
-
-  "dev": "nodemon server.js",
-  "start": "node server.js",
-
-  "migrate:create": "node-pg-migrate create",
-
-  "migrate:up": "node-pg-migrate up --envPath=.env",
-
-  "setup": "npm run migrate:up && npm run migrate:test",
-
-  "migrate:test": "node-pg-migrate up --envPath=.env.test",
-
-  "migrate:down": "node-pg-migrate down --envPath=.env"
-},
-
+    "test": "cross-env NODE_ENV=test jest --runInBand",
+    "dev": "nodemon server.js",
+    "start": "node server.js",
+    "migrate:create": "node-pg-migrate create",
+    "migrate:up": "node-pg-migrate up --envPath=.env",
+    "setup": "npm run migrate:up && npm run migrate:test",
+    "migrate:test": "node-pg-migrate up --envPath=.env.test",
+    "migrate:down": "node-pg-migrate down --envPath=.env"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -29,6 +22,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.1",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "mssql": "^12.2.1",
     "node-pg-migrate": "^8.0.4",
@@ -43,4 +37,3 @@
     "supertest": "^7.2.2"
   }
 }
- 

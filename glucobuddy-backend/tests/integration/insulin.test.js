@@ -5,6 +5,7 @@ const {
   createAuthenticatedUser,
   insertInsulin,
   pool,
+  toBrowserPayload,
 } = require('./helpers');
 
 describe('Insulin API', () => {
@@ -22,11 +23,11 @@ describe('Insulin API', () => {
       const response = await request(app)
         .post('/api/insulin')
         .set(authHeader(token))
-        .send({
+        .send(toBrowserPayload({
           units: 4.5,
           insulin_type: 'rapid',
           logged_at: '2026-01-15T08:30',
-        });
+        }));
 
       expect(response.status).toBe(201);
       expect(response.body.message).toBe('Insulin logged');
@@ -44,12 +45,12 @@ describe('Insulin API', () => {
       const response = await request(app)
         .post('/api/insulin')
         .set(authHeader(token))
-        .send({
+        .send(toBrowserPayload({
           units: 16,
           insulin_type: 'long',
           glucose_level: 7.2,
           logged_at: '2026-01-15T22:15:00',
-        });
+        }));
 
       expect(response.status).toBe(201);
       expect(response.body.message).toBe('Insulin and glucose logged');
@@ -194,4 +195,3 @@ describe('Insulin API', () => {
     });
   });
 });
-

@@ -5,6 +5,7 @@ const {
   createAuthenticatedUser,
   insertDoseCalculation,
   pool,
+  toBrowserPayload,
 } = require('./helpers');
 
 function hoursAgo(hours) {
@@ -119,12 +120,12 @@ describe('Adaptive API', () => {
     const dose = await insertDoseCalculation(userId);
 
     const response = await request(app)
-      .post('/api/adaptive/outcome')
-      .set(authHeader(token))
-      .send({
-        doseId: dose.id,
-        outcomeGlucose: 7.4,
-      });
+        .post('/api/adaptive/outcome')
+        .set(authHeader(token))
+        .send(toBrowserPayload({
+          doseId: dose.id,
+          outcomeGlucose: 7.4,
+        }));
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);

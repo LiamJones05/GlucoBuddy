@@ -5,6 +5,7 @@ const {
   createAuthenticatedUser,
   insertMeal,
   pool,
+  toBrowserPayload,
 } = require('./helpers');
 
 describe('Meal API', () => {
@@ -22,7 +23,7 @@ describe('Meal API', () => {
       const response = await request(app)
         .post('/api/meals')
         .set(authHeader(token))
-        .send({ carbs: 45, protein: 20 });
+        .send(toBrowserPayload({ carbs: 45, protein: 20 }));
 
       expect(response.status).toBe(201);
       expect(response.body.message).toBe('Meal logged');

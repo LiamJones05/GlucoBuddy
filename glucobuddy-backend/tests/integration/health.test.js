@@ -7,5 +7,7 @@ describe('Health endpoint', () => {
 
     expect(response.status).toBe(200);
     expect(response.text).toBe('GlucoBuddy API running');
+    expect(response.headers['x-content-type-options']).toBe('nosniff');
+    expect(response.headers['x-frame-options']).toBeDefined();
   });
 });

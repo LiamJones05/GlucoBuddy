@@ -5,6 +5,7 @@ const {
   createAuthenticatedUser,
   insertGlucose,
   pool,
+  toBrowserPayload,
 } = require('./helpers');
 
 describe('Glucose API', () => {
@@ -22,10 +23,10 @@ describe('Glucose API', () => {
       const response = await request(app)
         .post('/api/glucose')
         .set(authHeader(token))
-        .send({
+        .send(toBrowserPayload({
           glucose_level: 6.4,
           logged_at: '2026-01-15T08:30',
-        });
+        }));
 
       expect(response.status).toBe(201);
       expect(response.body).toEqual({

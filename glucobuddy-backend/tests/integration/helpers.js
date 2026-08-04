@@ -41,6 +41,26 @@ function authHeader(token) {
   return { Authorization: `Bearer ${token}` };
 }
 
+// Axios serialises JavaScript objects as JSON, but values read directly from
+// HTML number inputs are strings unless the frontend explicitly converts them.
+function toBrowserPayload(value) {
+  if (typeof value === 'number') {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(toBrowserPayload);
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, toBrowserPayload(entry)])
+    );
+  }
+
+  return value;
+}
+
 async function insertGlucose(userId, glucoseLevel, loggedAt) {
   const [loggedDate, loggedTime] = loggedAt.split('T');
   const result = await pool.query(
@@ -125,4 +145,5 @@ module.exports = {
   insertInsulin,
   insertMeal,
   pool,
+  toBrowserPayload,
 };

@@ -101,6 +101,10 @@ export default function AdaptiveSettings() {
           your post-meal glucose outcomes. Changes are small, conservative, and
           always capped relative to your configured baseline.
         </p>
+        <p className="adaptive-settings__disclaimer" role="note">
+          <strong>Important:</strong> Adaptive dosing is educational decision support,
+          not medical advice. Review any insulin-setting changes with your healthcare professional.
+        </p>
       </div>
 
       {/* ── Toggle ─────────────────────────────────────────────────────────── */}

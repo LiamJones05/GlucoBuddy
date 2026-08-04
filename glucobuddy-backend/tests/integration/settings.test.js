@@ -86,12 +86,12 @@ describe('Settings API', () => {
   describe('PUT /api/settings', () => {
 
     const UPDATED_SETTINGS = {
-      correction_ratio: 3,
-      target_min: 5,
-      target_max: 8,
-      carb_ratio_morning: 9,
-      carb_ratio_afternoon: 11,
-      carb_ratio_evening: 10,
+      correction_ratio: '3',
+      target_min: '5',
+      target_max: '8',
+      carb_ratio_morning: '9',
+      carb_ratio_afternoon: '11',
+      carb_ratio_evening: '10',
     };
 
     test('updates settings successfully', async () => {

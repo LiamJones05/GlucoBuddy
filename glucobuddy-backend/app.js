@@ -1,9 +1,23 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 
 const app = express();
 
 app.set('trust proxy', 1);
+
+/*
+|--------------------------------------------------------------------------
+| Security Headers
+|--------------------------------------------------------------------------
+*/
+
+app.use(helmet({
+  // #40 will add an explicit policy after auditing Vite, PWA, and chart assets.
+  contentSecurityPolicy: false,
+  // HSTS only has an effect over HTTPS, so avoid advertising it during local HTTP development.
+  strictTransportSecurity: process.env.NODE_ENV === 'production' ? undefined : false,
+}));
 
 /*
 |--------------------------------------------------------------------------

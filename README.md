@@ -510,6 +510,10 @@ npm run build
 npm run lint
 ```
 
+### Browser-representative API integration tests
+
+Integration tests should use payload types that the browser can actually send. In particular, values read from HTML number inputs are strings unless the frontend converts them first. Use numeric strings in API integration tests for form-backed numeric fields, and keep backend schemas resilient with `z.coerce.number()`.
+
 ---
 
 # API Health Check
